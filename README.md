@@ -1,3 +1,3 @@
-How to run this:
+To Compile:
 - mvn compile
-- mvn exec:java -Dexec.mainClass="Main" 
+- mvn exec:java

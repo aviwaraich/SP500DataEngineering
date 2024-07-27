@@ -22,7 +22,7 @@ public class CashAccount {
         if (cash >= amount) {
             cash -= amount;
         } else {
-            // Handle insufficient funds
+            // idk what to do for insufficient funds
         }
     }
 }

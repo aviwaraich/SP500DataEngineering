@@ -1,7 +1,9 @@
+
 import java.util.List;
 import java.util.Scanner;
 
 public class Main {
+
     private static User loggedInUser = null;
     private static Scanner scanner = new Scanner(System.in);
 
@@ -21,10 +23,10 @@ public class Main {
         System.out.println("2. Login");
         System.out.println("3. Exit");
         System.out.print("Choose an option: ");
-        
+
         int choice = scanner.nextInt();
-        scanner.nextLine(); 
-        
+        scanner.nextLine();
+
         switch (choice) {
             case 1:
                 register();
@@ -46,12 +48,13 @@ public class Main {
         System.out.println("1. View Portfolios");
         System.out.println("2. Create New Portfolio");
         System.out.println("3. Manage Portfolio");
-        System.out.println("4. Logout");
+        System.out.println("4. Social Features");
+        System.out.println("5. Log out");
         System.out.print("Choose an option: ");
-        
+
         int choice = scanner.nextInt();
-        scanner.nextLine();  
-        
+        scanner.nextLine();
+
         switch (choice) {
             case 1:
                 viewPortfolios();
@@ -63,6 +66,9 @@ public class Main {
                 managePortfolio();
                 break;
             case 4:
+                showSocialMenu();
+                break;
+            case 5:
                 loggedInUser = null;
                 System.out.println("Logged out successfully.");
                 break;
@@ -76,7 +82,7 @@ public class Main {
         String username = scanner.nextLine();
         System.out.print("Enter new password: ");
         String password = scanner.nextLine();
-        
+
         if (User.register(username, password)) {
             System.out.println("Registration successful!");
         } else {
@@ -89,7 +95,7 @@ public class Main {
         String username = scanner.nextLine();
         System.out.print("Enter password: ");
         String password = scanner.nextLine();
-        
+
         User user = User.login(username, password);
         if (user != null) {
             loggedInUser = user;
@@ -116,12 +122,12 @@ public class Main {
     private static void createPortfolio() {
         System.out.print("Enter initial cash amount for the new portfolio: $");
         double initialCash = scanner.nextDouble();
-        scanner.nextLine(); 
-        
-        int portfolioId = loggedInUser.getPortfolios().size() + 1; 
+        scanner.nextLine();
+
+        int portfolioId = loggedInUser.getPortfolios().size() + 1;
         Portfolio newPortfolio = new Portfolio(portfolioId, loggedInUser.getUsername(), initialCash);
         loggedInUser.addPortfolio(newPortfolio);
-        
+
         if (User.savePortfolio(newPortfolio)) {
             System.out.println("New portfolio created successfully.");
         } else {
@@ -133,7 +139,7 @@ public class Main {
     private static void managePortfolio() {
         System.out.print("Enter portfolio ID: ");
         int portfolioId = scanner.nextInt();
-        scanner.nextLine(); 
+        scanner.nextLine();
 
         Portfolio portfolio = loggedInUser.getPortfolio(portfolioId);
         if (portfolio == null) {
@@ -150,7 +156,7 @@ public class Main {
             System.out.print("Choose an option: ");
 
             int choice = scanner.nextInt();
-            scanner.nextLine(); 
+            scanner.nextLine();
 
             switch (choice) {
                 case 1:
@@ -177,7 +183,7 @@ public class Main {
         int quantity = scanner.nextInt();
         System.out.print("Enter price per share: $");
         double price = scanner.nextDouble();
-        scanner.nextLine(); 
+        scanner.nextLine();
 
         portfolio.buyStock(symbol, quantity, price);
     }
@@ -189,8 +195,172 @@ public class Main {
         int quantity = scanner.nextInt();
         System.out.print("Enter price per share: $");
         double price = scanner.nextDouble();
-        scanner.nextLine(); 
+        scanner.nextLine();
 
         portfolio.sellStock(symbol, quantity, price);
+    }
+
+    private static void showSocialMenu() {
+        System.out.println("\n--- Social Features ---");
+        System.out.println("1. View Friends");
+        System.out.println("2. View Incoming Friend Requests");
+        System.out.println("3. View Outgoing Friend Requests");
+        System.out.println("4. Send Friend Request");
+        System.out.println("5. Accept Friend Request");
+        System.out.println("6. Reject Friend Request");
+        System.out.println("7. Remove Friend");
+        System.out.println("8. Create Stock List");
+        System.out.println("9. Delete Stock List");
+        System.out.println("10. Share Stock List");
+        System.out.println("11. View StockList");
+        System.out.println("12. Return to Main Menu");
+        System.out.print("Choose an option: ");
+
+        int choice = scanner.nextInt();
+        scanner.nextLine();
+
+        switch (choice) {
+            case 1:
+                loggedInUser.viewFriends();
+                break;
+            case 2:
+                loggedInUser.viewIncomingFriendRequests();
+                break;
+            case 3:
+                loggedInUser.viewOutgoingFriendRequests();
+                break;
+            case 4:
+                sendFriendRequest();
+                break;
+            case 5:
+                acceptFriendRequest();
+                break;
+            case 6:
+                rejectFriendRequest();
+                break;
+            case 7:
+                removeFriend();
+                break;
+            case 8:
+                createStockList();
+                break;
+            case 9:
+                deleteStockList();
+                break;
+            case 10:
+                shareStockList();
+                break;
+            case 11:
+                viewStockList();
+                break;
+            case 12:
+                return;
+            default:
+                System.out.println("Invalid option. Please try again.");
+        }
+    }
+
+    private static void sendFriendRequest() {
+        System.out.print("Enter username of the user to send a friend request to: ");
+        String username = scanner.nextLine();
+        if (loggedInUser.sendFriendRequest(username)) {
+            System.out.println("Friend request sent to " + username + ".");
+        } else {
+            System.out.println("User not found.");
+        }
+    }
+
+    private static void acceptFriendRequest() {
+        System.out.print("Enter username of the user whose friend request you want to accept: ");
+        String username = scanner.nextLine();
+        if (loggedInUser.acceptFriendRequest(username)) {
+            System.out.println("Friend request from " + username + " accepted.");
+        } else {
+            System.out.println("User not found.");
+        }
+    }
+
+    private static void rejectFriendRequest() {
+        System.out.print("Enter username of the user whose friend request you want to reject: ");
+        String username = scanner.nextLine();
+        if (loggedInUser.rejectFriendRequest(username)) {
+            System.out.println("Friend request from " + username + " rejected.");
+        } else {
+            System.out.println("User not found.");
+        }
+    }
+
+    private static void removeFriend() {
+        System.out.print("Enter username of the friend you want to remove: ");
+        String username = scanner.nextLine();
+        if (loggedInUser.removeFriend(username)) {
+            System.out.println("Friend " + username + " removed.");
+        } else {
+            System.out.println("User not found.");
+        }
+    }
+
+    private static void createStockList() {
+        System.out.print("Enter name for the new stock list: ");
+        String name = scanner.nextLine();
+        //MORE 
+        System.out.println("Stock list '" + name + "' created.");
+    }
+
+    private static void deleteStockList() {
+        System.out.print("Enter name of the stock list to delete: ");
+        String name = scanner.nextLine();
+        //MORE
+    }
+
+    private static void shareStockList() {
+        System.out.print("Enter name of the stock list to share: ");
+        String listName = scanner.nextLine();
+        System.out.print("Enter username of the user to share with: ");
+        String username = scanner.nextLine();
+        //MORE
+    }
+
+    private static void viewStockList() {
+        System.out.print("Enter the ID of the stock list to view: ");
+        String listID = scanner.nextLine();
+        StockList stockList = loggedInUser.viewStockList(listID, loggedInUser.getUsername());
+        if (stockList != null) {
+            stockList.viewDetails();
+            while (true) {
+                System.out.println("\n--- Stock List Options ---");
+                System.out.println("1. Write Review");
+                System.out.println("2. Delete Review");
+                System.out.println("3. Return to Social Menu");
+                System.out.print("Choose an option: ");
+
+                int choice = scanner.nextInt();
+                scanner.nextLine();
+
+                switch (choice) {
+                    case 1:
+                        writeReview(stockList.getListID());
+                        break;
+                    case 2:
+                        deleteReview(stockList.getListID());
+                        break;
+                    case 3:
+                        return;
+                    default:
+                        System.out.println("Invalid option. Please try again.");
+                }
+            }
+        }
+    }
+
+    private static void writeReview(String listID) {
+        System.out.print("Enter your review: ");
+        String reviewText = scanner.nextLine();
+        loggedInUser.writeReview(listID, reviewText);
+        System.out.println("Review added to stock list.");
+    }
+
+    private static void deleteReview(String listID) {
+        loggedInUser.deleteReview(listID);
     }
 }

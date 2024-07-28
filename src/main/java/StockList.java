@@ -50,4 +50,23 @@ public class StockList {
     public void setReviews(List<Review> loadStockListReviews) {
         reviews = loadStockListReviews;
     }
+
+    // Overriding toString() method for better representation
+    @Override
+    public String toString() {
+        return "Stock List ID: " + listID + ", Name: " + name + ", Public: " + isPublic + ", Creator: " + creator;
+    }
+
+    // Method to view details of the stock list
+    public void viewDetails() {
+        System.out.println(this);
+        System.out.println("Stocks:");
+        for (Stock stock : stocks) {
+            System.out.println("  " + stock);
+        }
+        System.out.println("Reviews:");
+        for (Review review : reviews) {
+            System.out.println("  " + review.getContent() + " - " + review.getUser() + " (" + review.getTimestamp() + ")");
+        }
+    }
 }

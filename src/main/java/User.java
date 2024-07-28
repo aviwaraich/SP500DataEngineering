@@ -178,14 +178,14 @@ public class User {
     }
 
     // Send friend request
-    public void sendFriendRequest(User receiver) {
+    public boolean sendFriendRequest(String receiver) {
         String checkSql = "SELECT request_time FROM FriendRequests WHERE sender_username = ? AND receiver_username = ? ORDER BY request_time DESC LIMIT 1";
         String insertSql = "INSERT INTO FriendRequests (sender_username, receiver_username, status, request_time) VALUES (?, ?, 'Pending', ?)";
 
         try (Connection conn = DriverManager.getConnection(DB_URL, DB_USER, DB_PASSWORD); PreparedStatement checkPstmt = conn.prepareStatement(checkSql)) {
 
             checkPstmt.setString(1, this.username);
-            checkPstmt.setString(2, receiver.getUsername());
+            checkPstmt.setString(2, receiver);
 
             try (ResultSet rs = checkPstmt.executeQuery()) {
                 if (rs.next()) {
@@ -197,77 +197,118 @@ public class User {
 
                     if (timeDifference < fiveMinutesInMillis) {
                         System.out.println("You can only send a friend request to the same person every 5 minutes.");
-                        return;
+                        return false;
                     }
                 }
             }
 
             try (PreparedStatement insertPstmt = conn.prepareStatement(insertSql)) {
                 insertPstmt.setString(1, this.username);
-                insertPstmt.setString(2, receiver.getUsername());
+                insertPstmt.setString(2, receiver);
                 insertPstmt.setTimestamp(3, new java.sql.Timestamp(new java.util.Date().getTime()));
 
                 int affectedRows = insertPstmt.executeUpdate();
                 if (affectedRows > 0) {
-                    FriendRequest request = new FriendRequest(this.username, receiver.getUsername());
-                    receiver.getFriendRequests().add(request);
+                    FriendRequest request = new FriendRequest(this.username, receiver);
+                    return true;
                 }
             }
 
         } catch (SQLException e) {
             e.printStackTrace();
         }
+        return false;
     }
 
-    // View and accept friend requests
-    public void acceptFriendRequest(FriendRequest request) {
-        if (friendRequests.contains(request) && request.getReceiver().equals(this.username)) {
-            String sqlUpdateRequest = "UPDATE FriendRequests SET status = 'Accepted' WHERE sender_username = ? AND receiver_username = ?";
-            String sqlInsertFriendship = "INSERT INTO Friendships (user1_username, user2_username) VALUES (?, ?), (?, ?)";
-
-            try (Connection conn = DriverManager.getConnection(DB_URL, DB_USER, DB_PASSWORD); PreparedStatement pstmtUpdate = conn.prepareStatement(sqlUpdateRequest); PreparedStatement pstmtInsert = conn.prepareStatement(sqlInsertFriendship)) {
-
-                // Update friend request status
-                pstmtUpdate.setString(1, request.getSender());
-                pstmtUpdate.setString(2, request.getReceiver());
-                pstmtUpdate.executeUpdate();
-
-                // Insert friendship records
-                pstmtInsert.setString(1, request.getSender());
-                pstmtInsert.setString(2, request.getReceiver());
-                pstmtInsert.setString(3, request.getReceiver());
-                pstmtInsert.setString(4, request.getSender());
-                pstmtInsert.executeUpdate();
-
-                friends.add(request.getSender());
-                friendRequests.remove(request);
-
-            } catch (SQLException e) {
-                e.printStackTrace();
+        // View and accept friend requests
+        public boolean acceptFriendRequest(String username) {
+            for (FriendRequest request : friendRequests) {
+                if (request.getReceiver().equals(this.username) && request.getSender().equals(username)) {
+                    String sqlUpdateRequest = "UPDATE FriendRequests SET status = 'Accepted' WHERE sender_username = ? AND receiver_username = ?";
+                    String sqlInsertFriendship = "INSERT INTO Friendships (user1_username, user2_username) VALUES (?, ?), (?, ?)";
+    
+                    try (Connection conn = DriverManager.getConnection(DB_URL, DB_USER, DB_PASSWORD); PreparedStatement pstmtUpdate = conn.prepareStatement(sqlUpdateRequest); PreparedStatement pstmtInsert = conn.prepareStatement(sqlInsertFriendship)) {
+    
+                        // Update friend request status
+                        pstmtUpdate.setString(1, request.getSender());
+                        pstmtUpdate.setString(2, request.getReceiver());
+                        pstmtUpdate.executeUpdate();
+    
+                        // Insert friendship records
+                        pstmtInsert.setString(1, request.getSender());
+                        pstmtInsert.setString(2, request.getReceiver());
+                        pstmtInsert.setString(3, request.getReceiver());
+                        pstmtInsert.setString(4, request.getSender());
+                        pstmtInsert.executeUpdate();
+    
+                        friends.add(request.getSender());
+                        friendRequests.remove(request);
+                        return true;
+    
+                    } catch (SQLException e) {
+                        e.printStackTrace();
+                    }
+                }
             }
+            return false;
         }
-    }
+        
+        //Reject Friend Request
+        public boolean rejectFriendRequest(String username) {
+            for (FriendRequest request : friendRequests) {
+                if (request.getReceiver().equals(this.username) && request.getSender().equals(username)) {
+                    String sqlUpdateRequest = "UPDATE FriendRequests SET status = 'Declined' WHERE sender_username = ? AND receiver_username = ?";
+    
+                    try (Connection conn = DriverManager.getConnection(DB_URL, DB_USER, DB_PASSWORD); PreparedStatement pstmt = conn.prepareStatement(sqlUpdateRequest)) {
+    
+                        pstmt.setString(1, request.getSender());
+                        pstmt.setString(2, request.getReceiver());
+                        pstmt.executeUpdate();
+    
+                        friendRequests.remove(request);
+                        return true;
+    
+                    } catch (SQLException e) {
+                        e.printStackTrace();
+                    }
+                }
+            }
+            return false;
+        }
+    
 
     // Remove friend
-    public void removeFriend(User friend) {
-        if (friends.contains(friend)) {
+    public boolean removeFriend(String friendUsername) {
+        if (friends.contains(friendUsername)) {
             String sqlDeleteFriendship = "DELETE FROM Friendships WHERE (user1_username = ? AND user2_username = ?) OR (user1_username = ? AND user2_username = ?)";
+            String sqlInsertFriendRequest = "INSERT INTO FriendRequests (sender_username, receiver_username, status, request_time) VALUES (?, ?, 'Declined', ?)";
 
-            try (Connection conn = DriverManager.getConnection(DB_URL, DB_USER, DB_PASSWORD); PreparedStatement pstmt = conn.prepareStatement(sqlDeleteFriendship)) {
+            try (Connection conn = DriverManager.getConnection(DB_URL, DB_USER, DB_PASSWORD); 
+                 PreparedStatement pstmtDelete = conn.prepareStatement(sqlDeleteFriendship);
+                 PreparedStatement pstmtInsert = conn.prepareStatement(sqlInsertFriendRequest)) {
 
-                pstmt.setString(1, this.username);
-                pstmt.setString(2, friend.getUsername());
-                pstmt.setString(3, friend.getUsername());
-                pstmt.setString(4, this.username);
-                pstmt.executeUpdate();
+                // Delete friendship record
+                pstmtDelete.setString(1, this.username);
+                pstmtDelete.setString(2, friendUsername);
+                pstmtDelete.setString(3, friendUsername);
+                pstmtDelete.setString(4, this.username);
+                int affectedRows = pstmtDelete.executeUpdate();
+                if (affectedRows > 0) {
+                    friends.remove(friendUsername);
 
-                friends.remove(friend);
-                friend.getFriends().remove(this);
+                    // Add a declined friend request record
+                    pstmtInsert.setString(1, this.username);
+                    pstmtInsert.setString(2, friendUsername);
+                    pstmtInsert.setTimestamp(3, new java.sql.Timestamp(new java.util.Date().getTime()));
+                    pstmtInsert.executeUpdate();
 
+                    return true;
+                }
             } catch (SQLException e) {
                 e.printStackTrace();
             }
         }
+        return false;
     }
 
     // Share stock list with friend
@@ -345,6 +386,8 @@ public class User {
         return null;
     }
 
+    
+
     // Method to load reviews for a stock list
     public List<Review> loadStockListReviews(String listID) {
         List<Review> reviews = new ArrayList<>();
@@ -360,7 +403,7 @@ public class User {
                     String content = rs.getString("content");
                     java.util.Date timestamp = new java.util.Date(rs.getTimestamp("timestamp").getTime());
                     String username = rs.getString("username");
-                    Review review = new Review(reviewID, content, timestamp, username, null); // Assuming the StockList will be set later
+                    Review review = new Review(reviewID, content, timestamp, username, listID); // Assuming the StockList will be set later
                     reviews.add(review);
                 }
             }
@@ -372,7 +415,6 @@ public class User {
 
     private boolean isStockListSharedWithUser(String listID, String username) {
         String sql = "SELECT * FROM SharedStockLists WHERE list_id = ? AND username = ?";
-
         try (Connection conn = DriverManager.getConnection(DB_URL, DB_USER, DB_PASSWORD); PreparedStatement pstmt = conn.prepareStatement(sql)) {
 
             pstmt.setString(1, listID);
@@ -389,7 +431,7 @@ public class User {
     }
 
     // Write review on stock list
-    public void writeReview(StockList list, String content) {
+    public void writeReview(String listID, String content) {
         String sql = "INSERT INTO Reviews (review_id, content, timestamp, username, list_id) VALUES (?, ?, ?, ?, ?)";
 
         try (Connection conn = DriverManager.getConnection(DB_URL, DB_USER, DB_PASSWORD); PreparedStatement pstmt = conn.prepareStatement(sql)) {
@@ -399,13 +441,11 @@ public class User {
             pstmt.setString(2, content);
             pstmt.setTimestamp(3, new java.sql.Timestamp(new java.util.Date().getTime()));
             pstmt.setString(4, this.username);
-            pstmt.setString(5, list.getListID());
+            pstmt.setString(5, listID);
 
             int affectedRows = pstmt.executeUpdate();
             if (affectedRows > 0) {
-                Review review = new Review(reviewID, content, new java.util.Date(), this.username, list);
-                list.getReviews().add(review);
-                reviews.add(review);
+                Review review = new Review(reviewID, content, new java.util.Date(), this.username, listID);
             }
 
         } catch (SQLException e) {
@@ -429,4 +469,80 @@ public class User {
         return reviews;
     }
 
+    // View friends
+    public void viewFriends() {
+        if (friends.isEmpty()) {
+            System.out.println("You have no friends yet.");
+            return;
+        }
+        System.out.println("\n--- Your Friends ---");
+        for (String friendUsername : friends) {
+            System.out.println(friendUsername);
+        }
+    }
+
+    // View incoming friend requests
+    public void viewIncomingFriendRequests() {
+        String sql = "SELECT sender_username FROM FriendRequests WHERE receiver_username = ? AND status = 'Pending'";
+        try (Connection conn = DriverManager.getConnection(DB_URL, DB_USER, DB_PASSWORD);
+             PreparedStatement pstmt = conn.prepareStatement(sql)) {
+            pstmt.setString(1, this.username);
+            try (ResultSet rs = pstmt.executeQuery()) {
+                if (!rs.next()) {
+                    System.out.println("You have no incoming friend requests.");
+                    return;
+                }
+                System.out.println("\n--- Incoming Friend Requests ---");
+                do {
+                    String senderUsername = rs.getString("sender_username");
+                    System.out.println(senderUsername + " has sent you a friend request.");
+                } while (rs.next());
+            }
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+    }
+
+    // View outgoing friend requests
+    public void viewOutgoingFriendRequests() {
+        String sql = "SELECT receiver_username FROM FriendRequests WHERE sender_username = ? AND status = 'Pending'";
+        try (Connection conn = DriverManager.getConnection(DB_URL, DB_USER, DB_PASSWORD);
+             PreparedStatement pstmt = conn.prepareStatement(sql)) {
+            pstmt.setString(1, this.username);
+            try (ResultSet rs = pstmt.executeQuery()) {
+                if (!rs.next()) {
+                    System.out.println("You have no outgoing friend requests.");
+                    return;
+                }
+                System.out.println("\n--- Outgoing Friend Requests ---");
+                do {
+                    String receiverUsername = rs.getString("receiver_username");
+                    System.out.println("You have sent a friend request to " + receiverUsername + ".");
+                } while (rs.next());
+            }
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+    }
+
+    // Delete review for a specific stock list
+    public void deleteReview(String listID) {
+        String sql = "DELETE FROM Reviews WHERE list_id = ? AND username = ?";
+
+        try (Connection conn = DriverManager.getConnection(DB_URL, DB_USER, DB_PASSWORD);
+             PreparedStatement pstmt = conn.prepareStatement(sql)) {
+
+            pstmt.setString(1, listID);
+            pstmt.setString(2, this.username);
+
+            int affectedRows = pstmt.executeUpdate();
+            if (affectedRows > 0) {
+                System.out.println("Your review deleted from stock list '" + listID + "'.");
+            } else {
+                System.out.println("You have not written a review for this stock list.");
+            }
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+    }
 }

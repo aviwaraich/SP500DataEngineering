@@ -5,14 +5,14 @@ public class Review {
     private String content;
     private Date timestamp;
     private String user;
-    private StockList stockList;
+    private String listID;
 
-    public Review(String reviewID, String content, Date timestamp, String user, StockList stockList) {
+    public Review(String reviewID, String content, Date timestamp, String user, String listID) {
         this.reviewID = reviewID;
         this.content = content;
         this.timestamp = timestamp;
         this.user = user;
-        this.stockList = stockList;
+        this.listID = listID;
     }
 
     public String getReviewID() {
@@ -31,7 +31,13 @@ public class Review {
         return user;
     }
 
-    public StockList getStockList() {
-        return stockList;
+    public String getStockListID() {
+        return listID;
+    }
+
+    // Overriding toString() method for better representation
+    @Override
+    public String toString() {
+        return "Review ID: " + reviewID + ", Content: " + content + ", User: " + user + ", Timestamp: " + timestamp;
     }
 }

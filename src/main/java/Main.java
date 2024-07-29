@@ -337,7 +337,7 @@ public class Main {
         for (StockList list : User.loadStockLists(loggedInUser.getUsername())) {
             viewableListIDs.add(list.getListID());
         }
-    
+
         // Prompt the user to enter a valid listID
         while (true) {
             System.out.println("\n--- Available Stock Lists ---");
@@ -347,7 +347,7 @@ public class Main {
             System.out.print("Enter the ID of the stock list to view: ");
             int listID = scanner.nextInt();
             scanner.nextLine();
-    
+
             if (viewableListIDs.contains(listID)) {
                 StockList stockList = loggedInUser.viewStockList(listID, loggedInUser.getUsername());
                 if (stockList != null) {
@@ -360,22 +360,22 @@ public class Main {
                         System.out.println("4. Delete Stock");
                         System.out.println("5. Return to Social Menu");
                         System.out.print("Choose an option: ");
-    
+
                         int choice = scanner.nextInt();
                         scanner.nextLine();
-    
+
                         switch (choice) {
                             case 1:
-                                writeReview(stockList.getListID());
+                                writeReview(listID);
                                 break;
                             case 2:
-                                deleteReview(stockList.getListID());
+                                deleteReview(listID);
                                 break;
                             case 3:
-                                addStock(stockList.getListID(), loggedInUser.getUsername());
+                                addStockToList(listID);
                                 break;
                             case 4:
-                                deleteStock(stockList.getListID(), loggedInUser.getUsername());
+                                deleteStockFromList(listID);
                                 break;
                             case 5:
                                 return;
@@ -389,7 +389,6 @@ public class Main {
             }
         }
     }
-    
 
     private static void writeReview(int listID) {
         System.out.print("Enter your review: ");
@@ -409,29 +408,26 @@ public class Main {
         }
     }
 
-    private static void addStock(int listID, String username) {
+    private static void addStockToList(int listID) {
         System.out.print("Enter stock symbol: ");
         String symbol = scanner.nextLine();
+        System.out.print("Enter number of shares: ");
+        int shares = scanner.nextInt();
+        scanner.nextLine(); // Consume the newline character
 
         // Check if the stock exists in the database
-        if (Stock.stockExists(symbol)) {
-            // Add the stock to the stock list
-            if (StockList.addStockToList(listID, symbol, username)) {
-                System.out.println("Stock '" + symbol + "' added to stock list '" + listID + "'.");
-            } else {
-                System.out.println("Failed to add stock. Please try again.");
-            }
+        if (loggedInUser.addStockToList(listID, symbol, shares)) {
+            System.out.println("Stock '" + symbol + "' added to stock list '" + listID + "'.");
         } else {
-            System.out.println("Stock symbol '" + symbol + "' not found.");
+            System.out.println("Failed to add stock. Please try again.");
         }
     }
 
-    private static void deleteStockFrom(int listID, String username) {
+    private static void deleteStockFromList(int listID) {
         System.out.print("Enter stock symbol: ");
         String symbol = scanner.nextLine();
-
         // Delete the stock from the stock list
-        if (StockList.deleteStockFromList(listID, symbol, username)) {
+        if (loggedInUser.deleteStockFromList(listID, symbol)) {
             System.out.println("Stock '" + symbol + "' deleted from stock list '" + listID + "'.");
         } else {
             System.out.println("Failed to delete stock. Please try again.");

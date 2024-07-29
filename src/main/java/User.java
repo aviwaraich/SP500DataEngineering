@@ -623,7 +623,7 @@ public class User {
     }
 
     // Add stock to a stock list
-    public boolean addStockFromList(int listID, String symbol, int share) {
+    public boolean addStockToList(int listID, String symbol, int share) {
         // Check if the user owns the stock list
         StockList list = getStockList(listID);
         if (list != null && list.getCreator().equals(this.username)) {
@@ -651,22 +651,21 @@ public class User {
     }
 
     // Delete stock from a stock list
-    public boolean deleteStockFromList(int listID, String symbol, int share) {
+    public boolean deleteStockFromList(int listID, String symbol) {
         // Check if the user owns the stock list
         StockList list = getStockList(listID);
         if (list != null && list.getCreator().equals(this.username)) {
-            String sql = "DELETE FROM StockListItem WHERE listid = ? AND symbol = ? AND share = ?";
+            String sql = "DELETE FROM StockListItem WHERE listid = ? AND symbol = ?";
 
             try (Connection conn = DriverManager.getConnection(DB_URL, DB_USER, DB_PASSWORD); PreparedStatement pstmt = conn.prepareStatement(sql)) {
 
                 pstmt.setInt(1, listID);
                 pstmt.setString(2, symbol);
-                pstmt.setInt(3, share);
 
                 int affectedRows = pstmt.executeUpdate();
                 if (affectedRows > 0) {
                     // Update the stock list in the User object
-                    list.getStocks().removeIf(stock -> stock.getSymbol().equals(symbol) && stock.getShares() == share);
+                    list.getStocks().removeIf(stock -> stock.getSymbol().equals(symbol));
                     return true;
                 }
             } catch (SQLException e) {

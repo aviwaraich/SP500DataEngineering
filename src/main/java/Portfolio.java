@@ -4,18 +4,26 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.List;
+import java.time.LocalDate;
+import java.sql.SQLException;
+import java.util.Map;
+import java.util.HashMap;
+import java.util.List;
+import java.util.stream.Collectors;
 
 public class Portfolio {
     private String name;
     private String username;
     private double cashBalance;
     private List<StockHolding> holdings;
+    private StockAnalyzer analyzer;
 
     public Portfolio(String name, String username, double cashBalance) {
         this.name = name;
         this.username = username;
         this.cashBalance = cashBalance;
         this.holdings = new ArrayList<>();
+        this.analyzer = new StockAnalyzer();
     }
 
     public String getName() { return name; }
@@ -231,5 +239,37 @@ public class Portfolio {
             e.printStackTrace();
         }
         return portfolios;
+    }
+
+    public Map<String, Double> calculateBetas(LocalDate startDate, LocalDate endDate) throws SQLException {
+        Map<String, Double> betas = new HashMap<>();
+        for (StockHolding holding : holdings) {
+            double beta = analyzer.calculateBeta(holding.getSymbol(), startDate, endDate);
+            betas.put(holding.getSymbol(), beta);
+        }
+        return betas;
+    }
+
+    public Map<String, Double> calculateCoVs(LocalDate startDate, LocalDate endDate) throws SQLException {
+        Map<String, Double> covs = new HashMap<>();
+        for (StockHolding holding : holdings) {
+            double cov = analyzer.calculateCoV(holding.getSymbol(), startDate, endDate);
+            covs.put(holding.getSymbol(), cov);
+        }
+        return covs;
+    }
+
+    public Map<String, Map<String, Double>> calculateCorrelationMatrix(LocalDate startDate, LocalDate endDate) throws SQLException {
+        List<String> symbols = holdings.stream().map(StockHolding::getSymbol).collect(Collectors.toList());
+        return analyzer.calculateCorrelationMatrix(symbols, startDate, endDate);
+    }
+
+    public Map<String, List<Double>> predictFuturePrices(LocalDate startDate, int daysToPredict) throws SQLException {
+        Map<String, List<Double>> predictions = new HashMap<>();
+        for (StockHolding holding : holdings) {
+            List<Double> prediction = analyzer.predictFuturePrice(holding.getSymbol(), startDate, startDate.plusDays(daysToPredict), daysToPredict);
+            predictions.put(holding.getSymbol(), prediction);
+        }
+        return predictions;
     }
 }

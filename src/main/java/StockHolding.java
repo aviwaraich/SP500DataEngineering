@@ -7,7 +7,9 @@ public class StockHolding {
         this.shares = shares;
     }
 
-    public String getSymbol() { return symbol; }
+    public String getSymbol() {
+        return symbol;
+    }
     public int getShares() { return shares; }
     public void setShares(int shares) { this.shares = shares; }
 

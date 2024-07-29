@@ -1,5 +1,11 @@
 import java.util.List;
 import java.util.Scanner;
+import java.time.LocalDate;
+import java.sql.SQLException;
+import java.util.Map;
+import java.util.HashMap;
+import java.util.List;
+import java.util.stream.Collectors;
 
 public class Main {
 
@@ -48,7 +54,10 @@ public class Main {
         System.out.println("2. Create New Portfolio");
         System.out.println("3. Manage Portfolio");
         System.out.println("4. Social Features");
-        System.out.println("5. Log out");
+        System.out.println("5. Analyze Portfolio");
+        System.out.println("6. Add New Stock Data");
+        System.out.println("7. Analyze Any Stock");
+        System.out.println("8. Log out");
         System.out.print("Choose an option: ");
 
         int choice = scanner.nextInt();
@@ -68,6 +77,26 @@ public class Main {
                 showSocialMenu();
                 break;
             case 5:
+                if (loggedInUser.getPortfolios().isEmpty()) {
+                    System.out.println("You don't have any portfolios to analyze.");
+                } else {
+                    System.out.print("Enter portfolio name to analyze: ");
+                    String portfolioName = scanner.nextLine();
+                    Portfolio portfolioToAnalyze = loggedInUser.getPortfolio(portfolioName);
+                    if (portfolioToAnalyze != null) {
+                        analyzePortfolio(portfolioToAnalyze);
+                    } else {
+                        System.out.println("Portfolio not found.");
+                    }
+                }
+                break;
+            case 6:
+                addNewStockData();
+                break;
+            case 7:
+                analyzeAnyStock();
+                break;
+            case 8:
                 loggedInUser = null;
                 System.out.println("Logged out successfully.");
                 break;
@@ -75,6 +104,7 @@ public class Main {
                 System.out.println("Invalid option. Please try again.");
         }
     }
+
 
     private static void register() {
         System.out.print("Enter new username: ");
@@ -376,4 +406,133 @@ public class Main {
     private static void deleteReview(int listID) {
         loggedInUser.deleteReview(listID);
     }
+
+     private static void analyzePortfolio(Portfolio portfolio) {
+        try {
+            LocalDate endDate = LocalDate.now();
+            LocalDate startDate = endDate.minusYears(1);
+
+            System.out.println("\n--- Portfolio Analysis ---");
+            System.out.println("Betas:");
+            Map<String, Double> betas = portfolio.calculateBetas(startDate, endDate);
+            betas.forEach((symbol, beta) -> System.out.println(symbol + ": " + beta));
+
+            System.out.println("\nCoefficients of Variation:");
+            Map<String, Double> covs = portfolio.calculateCoVs(startDate, endDate);
+            covs.forEach((symbol, cov) -> System.out.println(symbol + ": " + cov));
+
+            System.out.println("\nCorrelation Matrix:");
+            Map<String, Map<String, Double>> correlationMatrix = portfolio.calculateCorrelationMatrix(startDate, endDate);
+            correlationMatrix.forEach((symbol1, correlations) -> {
+                correlations.forEach((symbol2, correlation) -> {
+                    System.out.println(symbol1 + " - " + symbol2 + ": " + correlation);
+                });
+            });
+
+            System.out.println("\nPrice Predictions (next 7 days):");
+            Map<String, List<Double>> predictions = portfolio.predictFuturePrices(endDate, 7);
+            predictions.forEach((symbol, prices) -> {
+                System.out.println(symbol + ": " + prices);
+            });
+
+        } catch (SQLException e) {
+            System.out.println("Error analyzing portfolio: " + e.getMessage());
+        }
+    }
+
+    private static void addNewStockData() {
+        Scanner scanner = new Scanner(System.in);
+        StockAnalyzer analyzer = new StockAnalyzer();
+
+        System.out.print("Enter stock symbol: ");
+        String symbol = scanner.nextLine();
+
+        System.out.print("Enter date (YYYY-MM-DD): ");
+        LocalDate date = LocalDate.parse(scanner.nextLine());
+
+        System.out.print("Enter open price: ");
+        double open = scanner.nextDouble();
+
+        System.out.print("Enter high price: ");
+        double high = scanner.nextDouble();
+
+        System.out.print("Enter low price: ");
+        double low = scanner.nextDouble();
+
+        System.out.print("Enter close price: ");
+        double close = scanner.nextDouble();
+
+        System.out.print("Enter volume: ");
+        int volume = scanner.nextInt();
+
+        try {
+            analyzer.addNewStockData(symbol, date, open, high, low, close, volume);
+            System.out.println("New stock data added successfully.");
+        } catch (SQLException e) {
+            System.out.println("Error adding new stock data: " + e.getMessage());
+        }
+    }
+
+    private static void analyzeAnyStock() {
+        StockAnalyzer analyzer = new StockAnalyzer();
+        try {
+            System.out.println("\n--- Available Stocks ---");
+            //List<String> symbols = analyzer.getAllStockSymbols();
+
+            System.out.print("Enter the stock symbol to analyze: ");
+            String symbol = scanner.nextLine();
+
+            LocalDate endDate = LocalDate.now();
+            LocalDate startDate = LocalDate.of(2013, 2, 8);
+
+            Map<String, Object> analysis = analyzer.analyzeStock(symbol, startDate, endDate);
+
+            System.out.println("\n--- Stock Analysis for " + symbol + " ---");
+
+            double cov = (double) analysis.get("cov");
+            System.out.println("Coefficient of Variation: " + cov);
+            if (cov > 1) {
+                System.out.println("Explanation: The stock has high volatility relative to its average price (CoV > 1).");
+            } else if (cov < 1) {
+                System.out.println("Explanation: The stock has low volatility relative to its average price (CoV < 1).");
+            } else {
+                System.out.println("Explanation: The stock has average volatility relative to its average price (CoV = 1).");
+            }
+
+            List<Double> movingAverages = (List<Double>) analysis.get("movingAverages");
+            System.out.println("10-day Moving Average: " + movingAverages.get(0));
+            System.out.println("30-day Moving Average: " + movingAverages.get(1));
+            if (movingAverages.get(0) > movingAverages.get(1)) {
+                System.out.println("Explanation: The stock is experiencing upward momentum (10-day MA > 30-day MA).");
+            } else if (movingAverages.get(0) < movingAverages.get(1)) {
+                System.out.println("Explanation: The stock is experiencing downward momentum (10-day MA < 30-day MA).");
+            } else {
+                System.out.println("Explanation: The stock has stable momentum (10-day MA = 30-day MA).");
+            }
+
+            double[] rsi = (double[]) analysis.get("rsi");
+            System.out.println("Relative Strength: " + rsi[0]);
+            System.out.println("Relative Strength Index (RSI): " + rsi[1]);
+            if (rsi[1] > 70) {
+                System.out.println("Explanation: The stock is overbought (RSI > 70).");
+            } else if (rsi[1] < 30) {
+                System.out.println("Explanation: The stock is oversold (RSI < 30).");
+            } else {
+                System.out.println("Explanation: The stock is in a neutral state (30 <= RSI <= 70).");
+            }
+
+            System.out.println("\nPrice Predictions (next 7 days):");
+            //List<Double> predictions = analyzer.predictFuturePrice(symbol, endDate, 7);
+            //for (int i = 0; i < predictions.size(); i++) {
+            //    System.out.println("Day " + (i+1) + ": " + predictions.get(i));
+            //}
+
+        } catch (SQLException e) {
+            System.out.println("Error analyzing stock: " + e.getMessage());
+        } finally {
+            analyzer.closeConnection();
+        }
+    }
 }
+
+

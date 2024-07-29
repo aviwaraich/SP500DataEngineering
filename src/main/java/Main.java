@@ -98,7 +98,6 @@ public class Main {
         User user = User.login(username, password);
         if (user != null) {
             loggedInUser = user;
-            loggedInUser.getPortfolios().addAll(User.loadPortfolios(username));
             System.out.println("Login successful! Welcome, " + loggedInUser.getUsername());
         } else {
             System.out.println("Login failed. Invalid username or password.");
@@ -128,7 +127,7 @@ public class Main {
         Portfolio newPortfolio = new Portfolio(name, loggedInUser.getUsername(), initialCash);
         loggedInUser.addPortfolio(newPortfolio);
 
-        if (User.savePortfolio(newPortfolio)) {
+        if (Portfolio.save(newPortfolio)) {
             System.out.println("New portfolio created successfully.");
         } else {
             System.out.println("Failed to create new portfolio. Please try again.");
@@ -338,7 +337,7 @@ public class Main {
         System.out.print("Enter the ID of the stock list to view: ");
         int listID = scanner.nextInt();
         scanner.nextLine();
-        StockList stockList = loggedInUser.viewStockList(listID, loggedInUser.getUsername());
+        StockList stockList = loggedInUser.viewStockList(listID);
         if (stockList != null) {
             stockList.viewDetails();
             while (true) {

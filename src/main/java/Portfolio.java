@@ -1,3 +1,7 @@
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -20,45 +24,158 @@ public class Portfolio {
     public void setCashBalance(double cashBalance) { this.cashBalance = cashBalance; }
     public List<StockHolding> getHoldings() { return holdings; }
 
-    public void addHolding(StockHolding holding) {
-        holdings.add(holding);
-    }
-
-    public void removeHolding(StockHolding holding) {
-        holdings.remove(holding);
-    }
-
     public void buyStock(String symbol, int quantity, double price) {
         double cost = quantity * price;
         if (cost <= cashBalance) {
-            cashBalance -= cost;
-            for (StockHolding holding : holdings) {
-                if (holding.getSymbol().equals(symbol)) {
-                    holding.setShares(holding.getShares() + quantity);
-                    return;
+            String updatePortfolioSql = "UPDATE Portfolio SET CashBalance = CashBalance - ? WHERE Name = ? AND Username = ?";
+            String upsertHoldingSql = "INSERT INTO StockHolding (PortfolioName, Username, Symbol, Shares) " +
+                                      "VALUES (?, ?, ?, ?) " +
+                                      "ON CONFLICT (PortfolioName, Username, Symbol) DO UPDATE SET Shares = StockHolding.Shares + ?";
+
+            try (Connection conn = DatabaseManager.getConnection()) {
+                conn.setAutoCommit(false);
+                try {
+                    // Update portfolio cash balance
+                    try (PreparedStatement pstmt = conn.prepareStatement(updatePortfolioSql)) {
+                        pstmt.setDouble(1, cost);
+                        pstmt.setString(2, this.name);
+                        pstmt.setString(3, this.username);
+                        pstmt.executeUpdate();
+                    }
+
+                    // Update or insert stock holding
+                    try (PreparedStatement pstmt = conn.prepareStatement(upsertHoldingSql)) {
+                        pstmt.setString(1, this.name);
+                        pstmt.setString(2, this.username);
+                        pstmt.setString(3, symbol);
+                        pstmt.setInt(4, quantity);
+                        pstmt.setInt(5, quantity);
+                        pstmt.executeUpdate();
+                    }
+
+                    conn.commit();
+                    cashBalance -= cost;
+                    updateLocalHoldings(symbol, quantity);
+                    System.out.println("Bought " + quantity + " shares of " + symbol + " for $" + cost);
+                } catch (SQLException e) {
+                    conn.rollback();
+                    System.out.println("Transaction failed. Rolling back.");
+                    e.printStackTrace();
+                } finally {
+                    conn.setAutoCommit(true);
                 }
+            } catch (SQLException e) {
+                System.out.println("Database operation failed.");
+                e.printStackTrace();
             }
-            holdings.add(new StockHolding(symbol, quantity));
-            System.out.println("Bought " + quantity + " shares of " + symbol + " for $" + cost);
         } else {
             System.out.println("Insufficient funds to buy stocks.");
         }
     }
 
     public void sellStock(String symbol, int quantity, double price) {
+        String checkSharesSql = "SELECT Shares FROM StockHolding WHERE PortfolioName = ? AND Username = ? AND Symbol = ?";
+        String updatePortfolioSql = "UPDATE Portfolio SET CashBalance = CashBalance + ? WHERE Name = ? AND Username = ?";
+        String updateHoldingSql = "UPDATE StockHolding SET Shares = Shares - ? " +
+                                  "WHERE PortfolioName = ? AND Username = ? AND Symbol = ?";
+        String deleteHoldingSql = "DELETE FROM StockHolding WHERE PortfolioName = ? AND Username = ? AND Symbol = ? AND Shares = 0";
+
+        try (Connection conn = DatabaseManager.getConnection()) {
+            conn.setAutoCommit(false);
+            try {
+                // Check if enough shares are available
+                int availableShares = 0;
+                try (PreparedStatement pstmt = conn.prepareStatement(checkSharesSql)) {
+                    pstmt.setString(1, this.name);
+                    pstmt.setString(2, this.username);
+                    pstmt.setString(3, symbol);
+                    ResultSet rs = pstmt.executeQuery();
+                    if (rs.next()) {
+                        availableShares = rs.getInt("Shares");
+                    }
+                }
+
+                if (availableShares >= quantity) {
+                    double earnings = quantity * price;
+
+                    // Update portfolio cash balance
+                    try (PreparedStatement pstmt = conn.prepareStatement(updatePortfolioSql)) {
+                        pstmt.setDouble(1, earnings);
+                        pstmt.setString(2, this.name);
+                        pstmt.setString(3, this.username);
+                        pstmt.executeUpdate();
+                    }
+
+                    // Update stock holding
+                    try (PreparedStatement pstmt = conn.prepareStatement(updateHoldingSql)) {
+                        pstmt.setInt(1, quantity);
+                        pstmt.setString(2, this.name);
+                        pstmt.setString(3, this.username);
+                        pstmt.setString(4, symbol);
+                        pstmt.executeUpdate();
+                    }
+
+                    // Remove holding if shares become 0
+                    try (PreparedStatement pstmt = conn.prepareStatement(deleteHoldingSql)) {
+                        pstmt.setString(1, this.name);
+                        pstmt.setString(2, this.username);
+                        pstmt.setString(3, symbol);
+                        pstmt.executeUpdate();
+                    }
+
+                    conn.commit();
+                    cashBalance += earnings;
+                    updateLocalHoldings(symbol, -quantity);
+                    System.out.println("Sold " + quantity + " shares of " + symbol + " for $" + earnings);
+                } else {
+                    System.out.println("Insufficient shares to sell.");
+                }
+            } catch (SQLException e) {
+                conn.rollback();
+                System.out.println("Transaction failed. Rolling back.");
+                e.printStackTrace();
+            } finally {
+                conn.setAutoCommit(true);
+            }
+        } catch (SQLException e) {
+            System.out.println("Database operation failed.");
+            e.printStackTrace();
+        }
+    }
+
+    private void updateLocalHoldings(String symbol, int quantityChange) {
         for (StockHolding holding : holdings) {
-            if (holding.getSymbol().equals(symbol) && holding.getShares() >= quantity) {
-                holding.setShares(holding.getShares() - quantity);
-                double earnings = quantity * price;
-                cashBalance += earnings;
-                System.out.println("Sold " + quantity + " shares of " + symbol + " for $" + earnings);
+            if (holding.getSymbol().equals(symbol)) {
+                holding.setShares(holding.getShares() + quantityChange);
                 if (holding.getShares() == 0) {
                     holdings.remove(holding);
                 }
                 return;
             }
         }
-        System.out.println("Insufficient shares to sell.");
+        if (quantityChange > 0) {
+            holdings.add(new StockHolding(symbol, quantityChange));
+        }
+    }
+
+    public void loadHoldings() {
+        String sql = "SELECT * FROM StockHolding WHERE PortfolioName = ? AND Username = ?";
+        holdings.clear();
+        try (Connection conn = DatabaseManager.getConnection();
+             PreparedStatement pstmt = conn.prepareStatement(sql)) {
+            pstmt.setString(1, this.name);
+            pstmt.setString(2, this.username);
+            try (ResultSet rs = pstmt.executeQuery()) {
+                while (rs.next()) {
+                    String symbol = rs.getString("Symbol");
+                    int shares = rs.getInt("Shares");
+                    holdings.add(new StockHolding(symbol, shares));
+                }
+            }
+        } catch (SQLException e) {
+            System.out.println("Failed to load holdings.");
+            e.printStackTrace();
+        }
     }
 
     @Override
@@ -72,5 +189,47 @@ public class Portfolio {
         for (StockHolding holding : holdings) {
             System.out.println("  " + holding);
         }
+    }
+
+    public static boolean save(Portfolio portfolio) {
+        String sql = "INSERT INTO Portfolio (name, username, cashbalance) VALUES (?, ?, ?)";
+
+        try (Connection conn = DatabaseManager.getConnection();
+             PreparedStatement pstmt = conn.prepareStatement(sql)) {
+
+            pstmt.setString(1, portfolio.getName());
+            pstmt.setString(2, portfolio.getUsername());
+            pstmt.setDouble(3, portfolio.getCashBalance());
+
+            int affectedRows = pstmt.executeUpdate();
+            return affectedRows > 0;
+        } catch (SQLException e) {
+            e.printStackTrace();
+            return false;
+        }
+    }
+
+    public static List<Portfolio> loadPortfolios(String username) {
+        List<Portfolio> portfolios = new ArrayList<>();
+        String sql = "SELECT * FROM Portfolio WHERE username = ?";
+
+        try (Connection conn = DatabaseManager.getConnection();
+             PreparedStatement pstmt = conn.prepareStatement(sql)) {
+
+            pstmt.setString(1, username);
+
+            try (ResultSet rs = pstmt.executeQuery()) {
+                while (rs.next()) {
+                    String portfolioName = rs.getString("name");
+                    double cashBalance = rs.getDouble("cashbalance");
+                    Portfolio portfolio = new Portfolio(portfolioName, username, cashBalance);
+                    portfolio.loadHoldings();
+                    portfolios.add(portfolio);
+                }
+            }
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+        return portfolios;
     }
 }

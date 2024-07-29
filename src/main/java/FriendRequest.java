@@ -1,6 +1,7 @@
 import java.util.Date;
 
 public class FriendRequest {
+
     private String sender;
     private String receiver;
     private Date requestTime;
@@ -17,16 +18,32 @@ public class FriendRequest {
         return sender;
     }
 
+    public void setSender(String sender) {
+        this.sender = sender;
+    }
+
     public String getReceiver() {
         return receiver;
+    }
+
+    public void setReceiver(String receiver) {
+        this.receiver = receiver;
     }
 
     public Date getRequestTime() {
         return requestTime;
     }
 
+    public void setRequestTime(Date requestTime) {
+        this.requestTime = requestTime;
+    }
+
     public String getStatus() {
         return status;
+    }
+
+    public void setStatus(String status) {
+        this.status = status;
     }
 
     public void accept() {

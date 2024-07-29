@@ -2,14 +2,14 @@ import java.util.ArrayList;
 import java.util.List;
 
 public class StockList {
-    private String listID;
+    private int listID;
     private String name;
     private boolean isPublic;
     private String creator;
     private List<Stock> stocks;
     private List<Review> reviews;
 
-    public StockList(String listID, String name, boolean isPublic, String creator) {
+    public StockList(int listID, String name, boolean isPublic, String creator) {
         this.listID = listID;
         this.name = name;
         this.isPublic = isPublic;
@@ -18,7 +18,7 @@ public class StockList {
         this.reviews = new ArrayList<>();
     }
 
-    public String getListID() {
+    public int getListID() {
         return listID;
     }
 

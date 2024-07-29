@@ -1,13 +1,13 @@
 import java.util.Date;
 
 public class Review {
-    private String reviewID;
+    private int reviewID;
     private String content;
     private Date timestamp;
     private String user;
-    private String listID;
+    private int listID;
 
-    public Review(String reviewID, String content, Date timestamp, String user, String listID) {
+    public Review(int reviewID, String content, Date timestamp, String user, int listID) {
         this.reviewID = reviewID;
         this.content = content;
         this.timestamp = timestamp;
@@ -15,8 +15,12 @@ public class Review {
         this.listID = listID;
     }
 
-    public String getReviewID() {
+    public int getReviewID() {
         return reviewID;
+    }
+
+    public int getStockListID() {
+        return listID;
     }
 
     public String getContent() {
@@ -29,10 +33,6 @@ public class Review {
 
     public String getUser() {
         return user;
-    }
-
-    public String getStockListID() {
-        return listID;
     }
 
     // Overriding toString() method for better representation

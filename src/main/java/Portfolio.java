@@ -2,22 +2,22 @@ import java.util.ArrayList;
 import java.util.List;
 
 public class Portfolio {
-    private int portfolioId;
+    private String name;
     private String username;
-    private double cashAccount;
+    private double cashBalance;
     private List<StockHolding> holdings;
 
-    public Portfolio(int portfolioId, String username, double cashAccount) {
-        this.portfolioId = portfolioId;
+    public Portfolio(String name, String username, double cashBalance) {
+        this.name = name;
         this.username = username;
-        this.cashAccount = cashAccount;
+        this.cashBalance = cashBalance;
         this.holdings = new ArrayList<>();
     }
 
-    public int getPortfolioId() { return portfolioId; }
+    public String getName() { return name; }
     public String getUsername() { return username; }
-    public double getCashAccount() { return cashAccount; }
-    public void setCashAccount(double cashAccount) { this.cashAccount = cashAccount; }
+    public double getCashBalance() { return cashBalance; }
+    public void setCashBalance(double cashBalance) { this.cashBalance = cashBalance; }
     public List<StockHolding> getHoldings() { return holdings; }
 
     public void addHolding(StockHolding holding) {
@@ -30,8 +30,8 @@ public class Portfolio {
 
     public void buyStock(String symbol, int quantity, double price) {
         double cost = quantity * price;
-        if (cost <= cashAccount) {
-            cashAccount -= cost;
+        if (cost <= cashBalance) {
+            cashBalance -= cost;
             for (StockHolding holding : holdings) {
                 if (holding.getSymbol().equals(symbol)) {
                     holding.setShares(holding.getShares() + quantity);
@@ -50,7 +50,7 @@ public class Portfolio {
             if (holding.getSymbol().equals(symbol) && holding.getShares() >= quantity) {
                 holding.setShares(holding.getShares() - quantity);
                 double earnings = quantity * price;
-                cashAccount += earnings;
+                cashBalance += earnings;
                 System.out.println("Sold " + quantity + " shares of " + symbol + " for $" + earnings);
                 if (holding.getShares() == 0) {
                     holdings.remove(holding);
@@ -63,7 +63,7 @@ public class Portfolio {
 
     @Override
     public String toString() {
-        return "Portfolio ID: " + portfolioId + ", Cash: $" + String.format("%.2f", cashAccount);
+        return "Portfolio Name: " + name + ", Cash: $" + String.format("%.2f", cashBalance);
     }
 
     public void viewDetails() {

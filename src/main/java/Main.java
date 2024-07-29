@@ -1,4 +1,3 @@
-
 import java.util.List;
 import java.util.Scanner;
 
@@ -120,12 +119,13 @@ public class Main {
     }
 
     private static void createPortfolio() {
+        System.out.print("Enter name for the new portfolio: ");
+        String name = scanner.nextLine();
         System.out.print("Enter initial cash amount for the new portfolio: $");
         double initialCash = scanner.nextDouble();
         scanner.nextLine();
 
-        int portfolioId = loggedInUser.getPortfolios().size() + 1;
-        Portfolio newPortfolio = new Portfolio(portfolioId, loggedInUser.getUsername(), initialCash);
+        Portfolio newPortfolio = new Portfolio(name, loggedInUser.getUsername(), initialCash);
         loggedInUser.addPortfolio(newPortfolio);
 
         if (User.savePortfolio(newPortfolio)) {
@@ -137,11 +137,10 @@ public class Main {
     }
 
     private static void managePortfolio() {
-        System.out.print("Enter portfolio ID: ");
-        int portfolioId = scanner.nextInt();
-        scanner.nextLine();
+        System.out.print("Enter portfolio name: ");
+        String name = scanner.nextLine();
 
-        Portfolio portfolio = loggedInUser.getPortfolio(portfolioId);
+        Portfolio portfolio = loggedInUser.getPortfolio(name);
         if (portfolio == null) {
             System.out.println("Portfolio not found.");
             return;
@@ -212,7 +211,7 @@ public class Main {
         System.out.println("8. Create Stock List");
         System.out.println("9. Delete Stock List");
         System.out.println("10. Share Stock List");
-        System.out.println("11. View StockList");
+        System.out.println("11. View Stock List");
         System.out.println("12. Return to Main Menu");
         System.out.print("Choose an option: ");
 
@@ -303,27 +302,42 @@ public class Main {
     private static void createStockList() {
         System.out.print("Enter name for the new stock list: ");
         String name = scanner.nextLine();
-        //MORE 
-        System.out.println("Stock list '" + name + "' created.");
+        System.out.print("Is the stock list public? (true/false): ");
+        boolean isPublic = scanner.nextBoolean();
+        scanner.nextLine();
+
+        StockList newList = loggedInUser.createStockList(name, isPublic);
+        if (newList != null) {
+            System.out.println("Stock list '" + name + "' created.");
+        } else {
+            System.out.println("Failed to create stock list. Please try again.");
+        }
     }
 
     private static void deleteStockList() {
-        System.out.print("Enter name of the stock list to delete: ");
-        String name = scanner.nextLine();
-        //MORE
+        System.out.print("Enter the ID of the stock list to delete: ");
+        int listID = scanner.nextInt();
+        scanner.nextLine();
+
+        // MORE
+        System.out.println("Stock list with ID '" + listID + "' deleted.");
     }
 
     private static void shareStockList() {
-        System.out.print("Enter name of the stock list to share: ");
-        String listName = scanner.nextLine();
+        System.out.print("Enter the ID of the stock list to share: ");
+        int listID = scanner.nextInt();
+        scanner.nextLine();
         System.out.print("Enter username of the user to share with: ");
         String username = scanner.nextLine();
-        //MORE
+
+        // MORE
+        System.out.println("Stock list with ID '" + listID + "' shared with " + username + ".");
     }
 
     private static void viewStockList() {
         System.out.print("Enter the ID of the stock list to view: ");
-        String listID = scanner.nextLine();
+        int listID = scanner.nextInt();
+        scanner.nextLine();
         StockList stockList = loggedInUser.viewStockList(listID, loggedInUser.getUsername());
         if (stockList != null) {
             stockList.viewDetails();
@@ -353,14 +367,14 @@ public class Main {
         }
     }
 
-    private static void writeReview(String listID) {
+    private static void writeReview(int listID) {
         System.out.print("Enter your review: ");
         String reviewText = scanner.nextLine();
         loggedInUser.writeReview(listID, reviewText);
         System.out.println("Review added to stock list.");
     }
 
-    private static void deleteReview(String listID) {
+    private static void deleteReview(int listID) {
         loggedInUser.deleteReview(listID);
     }
 }

@@ -1,3 +1,5 @@
+
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Scanner;
 
@@ -318,8 +320,6 @@ public class Main {
         System.out.print("Enter the ID of the stock list to delete: ");
         int listID = scanner.nextInt();
         scanner.nextLine();
-
-        // MORE
         System.out.println("Stock list with ID '" + listID + "' deleted.");
     }
 
@@ -329,43 +329,61 @@ public class Main {
         scanner.nextLine();
         System.out.print("Enter username of the user to share with: ");
         String username = scanner.nextLine();
-
-        // MORE
+        loggedInUser.shareStockList(listID, username);
         System.out.println("Stock list with ID '" + listID + "' shared with " + username + ".");
     }
 
     private static void viewStockList() {
-        System.out.print("Enter the ID of the stock list to view: ");
-        int listID = scanner.nextInt();
-        scanner.nextLine();
-        StockList stockList = loggedInUser.viewStockList(listID, loggedInUser.getUsername());
-        if (stockList != null) {
-            stockList.viewDetails();
-            while (true) {
-                System.out.println("\n--- Stock List Options ---");
-                System.out.println("1. Write Review");
-                System.out.println("2. Delete Review");
-                System.out.println("3. Return to Social Menu");
-                System.out.print("Choose an option: ");
-
-                int choice = scanner.nextInt();
-                scanner.nextLine();
-
-                switch (choice) {
-                    case 1:
-                        writeReview(stockList.getListID());
-                        break;
-                    case 2:
-                        deleteReview(stockList.getListID());
-                        break;
-                    case 3:
-                        return;
-                    default:
-                        System.out.println("Invalid option. Please try again.");
+        // List all listIDs that the current user can see
+        List<Integer> viewableListIDs = new ArrayList<>();
+        for (StockList list : loggedInUser.getStockLists()) {
+            viewableListIDs.add(list.getListID());
+        }
+    
+        // Prompt the user to enter a valid listID
+        while (true) {
+            System.out.println("\n--- Available Stock Lists ---");
+            for (int listID : viewableListIDs) {
+                System.out.println("  " + listID);
+            }
+            System.out.print("Enter the ID of the stock list to view: ");
+            int listID = scanner.nextInt();
+            scanner.nextLine();
+    
+            if (viewableListIDs.contains(listID)) {
+                StockList stockList = loggedInUser.viewStockList(listID, loggedInUser.getUsername());
+                if (stockList != null) {
+                    stockList.viewDetails();
+                    while (true) {
+                        System.out.println("\n--- Stock List Options ---");
+                        System.out.println("1. Write Review");
+                        System.out.println("2. Delete Review");
+                        System.out.println("3. Return to Social Menu");
+                        System.out.print("Choose an option: ");
+    
+                        int choice = scanner.nextInt();
+                        scanner.nextLine();
+    
+                        switch (choice) {
+                            case 1:
+                                writeReview(stockList.getListID());
+                                break;
+                            case 2:
+                                deleteReview(stockList.getListID());
+                                break;
+                            case 3:
+                                return;
+                            default:
+                                System.out.println("Invalid option. Please try again.");
+                        }
+                    }
                 }
+            } else {
+                System.out.println("Invalid stock list ID. Please enter a valid ID.");
             }
         }
     }
+    
 
     private static void writeReview(int listID) {
         System.out.print("Enter your review: ");
@@ -375,6 +393,13 @@ public class Main {
     }
 
     private static void deleteReview(int listID) {
-        loggedInUser.deleteReview(listID);
+        System.out.print("Are you sure you want to delete your review? (yes/no): ");
+        String confirmation = scanner.nextLine();
+        if (confirmation.equalsIgnoreCase("yes")) {
+            loggedInUser.deleteReview(listID);
+            System.out.println("Review deleted from stock list.");
+        } else {
+            System.out.println("Review deletion cancelled.");
+        }
     }
 }

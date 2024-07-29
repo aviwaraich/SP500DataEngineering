@@ -307,9 +307,7 @@ public class Main {
         System.out.print("Is the stock list public? (true/false): ");
         boolean isPublic = scanner.nextBoolean();
         scanner.nextLine();
-
-        StockList newList = loggedInUser.createStockList(name, isPublic);
-        if (newList != null) {
+        if (loggedInUser.createStockList(name, isPublic)) {
             System.out.println("Stock list '" + name + "' created.");
         } else {
             System.out.println("Failed to create stock list. Please try again.");
@@ -336,7 +334,7 @@ public class Main {
     private static void viewStockList() {
         // List all listIDs that the current user can see
         List<Integer> viewableListIDs = new ArrayList<>();
-        for (StockList list : loggedInUser.getStockLists()) {
+        for (StockList list : User.loadStockLists(loggedInUser.getUsername())) {
             viewableListIDs.add(list.getListID());
         }
     
@@ -358,7 +356,9 @@ public class Main {
                         System.out.println("\n--- Stock List Options ---");
                         System.out.println("1. Write Review");
                         System.out.println("2. Delete Review");
-                        System.out.println("3. Return to Social Menu");
+                        System.out.println("3. Add Stock");
+                        System.out.println("4. Delete Stock");
+                        System.out.println("5. Return to Social Menu");
                         System.out.print("Choose an option: ");
     
                         int choice = scanner.nextInt();
@@ -372,6 +372,12 @@ public class Main {
                                 deleteReview(stockList.getListID());
                                 break;
                             case 3:
+                                addStock(stockList.getListID(), loggedInUser.getUsername());
+                                break;
+                            case 4:
+                                deleteStock(stockList.getListID(), loggedInUser.getUsername());
+                                break;
+                            case 5:
                                 return;
                             default:
                                 System.out.println("Invalid option. Please try again.");
@@ -400,6 +406,35 @@ public class Main {
             System.out.println("Review deleted from stock list.");
         } else {
             System.out.println("Review deletion cancelled.");
+        }
+    }
+
+    private static void addStock(int listID, String username) {
+        System.out.print("Enter stock symbol: ");
+        String symbol = scanner.nextLine();
+
+        // Check if the stock exists in the database
+        if (Stock.stockExists(symbol)) {
+            // Add the stock to the stock list
+            if (StockList.addStockToList(listID, symbol, username)) {
+                System.out.println("Stock '" + symbol + "' added to stock list '" + listID + "'.");
+            } else {
+                System.out.println("Failed to add stock. Please try again.");
+            }
+        } else {
+            System.out.println("Stock symbol '" + symbol + "' not found.");
+        }
+    }
+
+    private static void deleteStockFrom(int listID, String username) {
+        System.out.print("Enter stock symbol: ");
+        String symbol = scanner.nextLine();
+
+        // Delete the stock from the stock list
+        if (StockList.deleteStockFromList(listID, symbol, username)) {
+            System.out.println("Stock '" + symbol + "' deleted from stock list '" + listID + "'.");
+        } else {
+            System.out.println("Failed to delete stock. Please try again.");
         }
     }
 }

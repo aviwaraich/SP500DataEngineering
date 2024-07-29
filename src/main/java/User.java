@@ -25,9 +25,9 @@ public class User {
         this.username = username;
         this.password = password;
         this.portfolios = new ArrayList<>();
-        this.stockLists = getStockLists(username);
-        this.friends = getFriends(username);
-        this.reviews = getReviews(username);
+        this.stockLists = loadStockLists(username);
+        this.friends = loadFriends(username);
+        this.reviews = loadReviews(username);
     }
 
     public static boolean register(String username, String password) {
@@ -157,12 +157,11 @@ public class User {
     public static List<StockList> loadStockLists(String username) {
         List<StockList> viewableStockLists = new ArrayList<>();
         String sql = "SELECT * FROM StockList WHERE ispublic = TRUE OR listid IN (SELECT listid FROM SharedStockList WHERE username = ?)";
-    
-        try (Connection conn = DriverManager.getConnection(DB_URL, DB_USER, DB_PASSWORD);
-             PreparedStatement pstmt = conn.prepareStatement(sql)) {
-    
+
+        try (Connection conn = DriverManager.getConnection(DB_URL, DB_USER, DB_PASSWORD); PreparedStatement pstmt = conn.prepareStatement(sql)) {
+
             pstmt.setString(1, username);
-    
+
             try (ResultSet rs = pstmt.executeQuery()) {
                 while (rs.next()) {
                     int listID = rs.getInt("listid");
@@ -182,12 +181,11 @@ public class User {
     public static List<Review> loadReviews(String username) {
         List<Review> userReviews = new ArrayList<>();
         String sql = "SELECT * FROM Review WHERE username = ?";
-    
-        try (Connection conn = DriverManager.getConnection(DB_URL, DB_USER, DB_PASSWORD);
-             PreparedStatement pstmt = conn.prepareStatement(sql)) {
-    
+
+        try (Connection conn = DriverManager.getConnection(DB_URL, DB_USER, DB_PASSWORD); PreparedStatement pstmt = conn.prepareStatement(sql)) {
+
             pstmt.setString(1, username);
-    
+
             try (ResultSet rs = pstmt.executeQuery()) {
                 while (rs.next()) {
                     int reviewID = rs.getInt("reviewid");
@@ -548,7 +546,6 @@ public class User {
             e.printStackTrace();
         }
     }
-    
 
     // View friends
     public void viewFriends() {
@@ -623,5 +620,61 @@ public class User {
         } catch (SQLException e) {
             e.printStackTrace();
         }
+    }
+
+    // Add stock to a stock list
+    public boolean addStockFromList(int listID, String symbol, int share) {
+        // Check if the user owns the stock list
+        StockList list = getStockList(listID);
+        if (list != null && list.getCreator().equals(this.username)) {
+            String sql = "INSERT INTO StockListItem (listid, symbol, share) VALUES (?, ?, ?)";
+
+            try (Connection conn = DriverManager.getConnection(DB_URL, DB_USER, DB_PASSWORD); PreparedStatement pstmt = conn.prepareStatement(sql)) {
+
+                pstmt.setInt(1, listID);
+                pstmt.setString(2, symbol);
+                pstmt.setInt(3, share);
+
+                int affectedRows = pstmt.executeUpdate();
+                if (affectedRows > 0) {
+                    // Update the stock list in the User object
+                    list.addStock(new StockHolding(symbol, share));
+                    return true;
+                }
+            } catch (SQLException e) {
+                e.printStackTrace();
+            }
+        } else {
+            System.out.println("You do not own this stock list and cannot add stocks to it.");
+        }
+        return false;
+    }
+
+    // Delete stock from a stock list
+    public boolean deleteStockFromList(int listID, String symbol, int share) {
+        // Check if the user owns the stock list
+        StockList list = getStockList(listID);
+        if (list != null && list.getCreator().equals(this.username)) {
+            String sql = "DELETE FROM StockListItem WHERE listid = ? AND symbol = ? AND share = ?";
+
+            try (Connection conn = DriverManager.getConnection(DB_URL, DB_USER, DB_PASSWORD); PreparedStatement pstmt = conn.prepareStatement(sql)) {
+
+                pstmt.setInt(1, listID);
+                pstmt.setString(2, symbol);
+                pstmt.setInt(3, share);
+
+                int affectedRows = pstmt.executeUpdate();
+                if (affectedRows > 0) {
+                    // Update the stock list in the User object
+                    list.getStocks().removeIf(stock -> stock.getSymbol().equals(symbol) && stock.getShares() == share);
+                    return true;
+                }
+            } catch (SQLException e) {
+                e.printStackTrace();
+            }
+        } else {
+            System.out.println("You do not own this stock list and cannot delete stocks from it.");
+        }
+        return false;
     }
 }

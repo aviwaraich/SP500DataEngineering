@@ -14,10 +14,10 @@ public class StockAnalyzer {
         }
     }
 
-    public double calculateBeta(String symbol, LocalDate startDate, LocalDate endDate) throws SQLException {
+    public double calculateBetas(String symbol, LocalDate startDate, LocalDate endDate) throws SQLException {
     // Retrieve Stock Returns
     String stockReturnsSql = "SELECT date, (close - LAG(close) OVER (ORDER BY date)) / LAG(close) OVER (ORDER BY date) AS return " +
-                             "FROM DailyStockData " +
+                             "FROM Stocks " +
                              "WHERE symbol = ? AND date BETWEEN ? AND ?";
     List<Double> stockReturns = new ArrayList<>();
     
@@ -35,7 +35,7 @@ public class StockAnalyzer {
 
     // Retrieve Market Returns
     String marketReturnsSql = "SELECT date, (close - LAG(close) OVER (ORDER BY date)) / LAG(close) OVER (ORDER BY date) AS return " +
-                              "FROM DailyStockData " +
+                              "FROM Stocks " +
                               "WHERE symbol = 'SPY' AND date BETWEEN ? AND ?";
     List<Double> marketReturns = new ArrayList<>();
     
@@ -59,12 +59,12 @@ public class StockAnalyzer {
     // Calculate Covariance and Variance
     String covarianceSql = "WITH stock_returns AS (" +
                            "  SELECT date, (close - LAG(close) OVER (ORDER BY date)) / LAG(close) OVER (ORDER BY date) AS return " +
-                           "  FROM DailyStockData " +
+                           "  FROM Stocks " +
                            "  WHERE symbol = ? AND date BETWEEN ? AND ?" +
                            "), " +
                            "market_returns AS (" +
                            "  SELECT date, (close - LAG(close) OVER (ORDER BY date)) / LAG(close) OVER (ORDER BY date) AS return " +
-                           "  FROM DailyStockData " +
+                           "  FROM Stocks " +
                            "  WHERE symbol = 'SPY' AND date BETWEEN ? AND ?" +
                            ") " +
                            "SELECT COVAR_POP(s.return, m.return) AS covariance, VAR_POP(m.return) AS variance " +
@@ -100,9 +100,9 @@ public class StockAnalyzer {
 
 
 
-    public double calculateCoV(String symbol, LocalDate startDate, LocalDate endDate) throws SQLException {
+    public double calculateCoVs(String symbol, LocalDate startDate, LocalDate endDate) throws SQLException {
         String sql = "SELECT STDDEV(close) / AVG(close) AS cov " +
-                     "FROM DailyStockData " +
+                     "FROM Stocks " +
                      "WHERE symbol = ? AND date BETWEEN ? AND ?";
 
         try (PreparedStatement pstmt = conn.prepareStatement(sql)) {
@@ -139,12 +139,12 @@ public class StockAnalyzer {
     private double calculateCorrelation(String symbol1, String symbol2, LocalDate startDate, LocalDate endDate) throws SQLException {
         String sql = "WITH returns1 AS (" +
                      "  SELECT date, (close - LAG(close) OVER (ORDER BY date)) / LAG(close) OVER (ORDER BY date) AS return " +
-                     "  FROM DailyStockData " +
+                     "  FROM Stocks " +
                      "  WHERE symbol = ? AND date BETWEEN ? AND ?" +
                      "), " +
                      "returns2 AS (" +
                      "  SELECT date, (close - LAG(close) OVER (ORDER BY date)) / LAG(close) OVER (ORDER BY date) AS return " +
-                     "  FROM DailyStockData " +
+                     "  FROM Stocks " +
                      "  WHERE symbol = ? AND date BETWEEN ? AND ?" +
                      ") " +
                      "SELECT CORR(r1.return, r2.return) AS correlation " +
@@ -169,7 +169,7 @@ public class StockAnalyzer {
 
     public List<Double> predictFuturePrice(String symbol, LocalDate startDate, LocalDate endDate, int daysToPredict) throws SQLException {
         String sql = "SELECT AVG(close) OVER (ORDER BY date ROWS BETWEEN 29 PRECEDING AND CURRENT ROW) AS ma30 " +
-                     "FROM DailyStockData " +
+                     "FROM Stocks " +
                      "WHERE symbol = ? AND date <= ? " +
                      "ORDER BY date DESC " +
                      "LIMIT 30";
@@ -192,7 +192,7 @@ public class StockAnalyzer {
     }
 
     public void addNewStockData(String symbol, LocalDate date, double open, double high, double low, double close, int volume) throws SQLException {
-        String sql = "INSERT INTO DailyStockData (Date, Symbol, Open, High, Low, Close, Volume) " +
+        String sql = "INSERT INTO Stocks (Date, Symbol, Open, High, Low, Close, Volume) " +
                      "VALUES (?, ?, ?, ?, ?, ?, ?) " +
                      "ON CONFLICT (Date, Symbol) DO UPDATE SET " +
                      "Open = EXCLUDED.Open, High = EXCLUDED.High, Low = EXCLUDED.Low, " +
@@ -213,7 +213,7 @@ public class StockAnalyzer {
 
     public List<String> getAllStockSymbols() throws SQLException {
         List<String> symbols = new ArrayList<>();
-        String sql = "SELECT DISTINCT Symbol FROM DailyStockData";
+        String sql = "SELECT DISTINCT Symbol FROM Stocks";
         try (Statement stmt = conn.createStatement();
              ResultSet rs = stmt.executeQuery(sql)) {
             while (rs.next()) {
@@ -226,8 +226,8 @@ public class StockAnalyzer {
     public Map<String, Object> analyzeStock(String symbol, LocalDate startDate, LocalDate endDate) throws SQLException {
         Map<String, Object> analysis = new HashMap<>();
         
-        analysis.put("beta", calculateBeta(symbol, startDate, endDate));
-        analysis.put("cov", calculateCoV(symbol, startDate, endDate));
+        analysis.put("beta", calculateBetas(symbol, startDate, endDate));
+        analysis.put("cov", calculateCoVs(symbol, startDate, endDate));
         
         List<Double> movingAverages = calculateMovingAverages(symbol, startDate, endDate);
         analysis.put("movingAverages", movingAverages);
@@ -241,7 +241,7 @@ public class StockAnalyzer {
     private List<Double> calculateMovingAverages(String symbol, LocalDate startDate, LocalDate endDate) throws SQLException {
         String sql = "SELECT AVG(Close) OVER (ORDER BY Date ROWS BETWEEN 9 PRECEDING AND CURRENT ROW) AS MA10, " +
                      "AVG(Close) OVER (ORDER BY Date ROWS BETWEEN 29 PRECEDING AND CURRENT ROW) AS MA30 " +
-                     "FROM DailyStockData " +
+                     "FROM Stocks " +
                      "WHERE Symbol = ? AND Date BETWEEN ? AND ? " +
                      "ORDER BY Date DESC LIMIT 1";
         
@@ -261,7 +261,7 @@ public class StockAnalyzer {
     private double[] calculateRSI(String symbol, LocalDate startDate, LocalDate endDate) throws SQLException {
         String sql = "WITH price_changes AS (" +
                      "  SELECT Date, Close - LAG(Close) OVER (ORDER BY Date) AS change " +
-                     "  FROM DailyStockData " +
+                     "  FROM Stocks " +
                      "  WHERE Symbol = ? AND Date BETWEEN ? AND ?" +
                      "), " +
                      "gains_losses AS (" +
@@ -291,7 +291,7 @@ public class StockAnalyzer {
     }
 
     public List<Double> predictFuturePrice(String symbol, LocalDate startDate, int daysToPredict) throws SQLException {
-        String sql = "SELECT Date, Close FROM DailyStockData WHERE Symbol = ? AND Date <= ? ORDER BY Date DESC LIMIT 30";
+        String sql = "SELECT Date, Close FROM Stocks WHERE Symbol = ? AND Date <= ? ORDER BY Date DESC LIMIT 30";
         
         List<Double> prices = new ArrayList<>();
         List<Integer> days = new ArrayList<>();

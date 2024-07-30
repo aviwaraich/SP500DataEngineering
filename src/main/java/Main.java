@@ -1,11 +1,8 @@
-import java.util.List;
-import java.util.Scanner;
-import java.time.LocalDate;
 import java.sql.SQLException;
-import java.util.Map;
-import java.util.HashMap;
+import java.time.LocalDate;
 import java.util.List;
-import java.util.stream.Collectors;
+import java.util.Map;
+import java.util.Scanner;
 
 public class Main {
 
@@ -135,17 +132,58 @@ public class Main {
     }
 
     private static void viewPortfolios() {
-        List<Portfolio> portfolios = loggedInUser.getPortfolios();
-        if (portfolios.isEmpty()) {
-            System.out.println("You don't have any portfolios yet.");
-        } else {
-            System.out.println("\n--- Your Portfolios ---");
-            for (Portfolio portfolio : portfolios) {
-                portfolio.viewDetails();
-                System.out.println();
+    List<Portfolio> portfolios = loggedInUser.getPortfolios();
+    if (portfolios.isEmpty()) {
+        System.out.println("You don't have any portfolios yet.");
+    } else {
+        System.out.println("\n--- Your Portfolios ---");
+        for (Portfolio portfolio : portfolios) {
+            double totalValue = portfolio.getCashBalance();
+            double totalCost = 0;
+            System.out.println("Portfolio Name: " + portfolio.getName());
+            System.out.printf("Cash Balance: $%.2f\n", portfolio.getCashBalance());
+            System.out.println("Holdings:");
+            
+            for (StockHolding holding : portfolio.getHoldings()) {
+                String symbol = holding.getSymbol();
+                int shares = holding.getShares();
+                double currentPrice = portfolio.getLatestClosePrice(symbol);
+                double purchasePrice = holding.getAveragePurchasePrice();
+                double currentValue = shares * currentPrice;
+                double cost = shares * purchasePrice;
+                
+                totalValue += currentValue;
+                totalCost += cost;
+                
+                System.out.printf("  %s: %d shares\n", symbol, shares);
+                System.out.printf("    Purchase Price: $%.2f\n", purchasePrice);
+                if (currentPrice != -1) {
+                    double percentChange = ((currentPrice - purchasePrice) / purchasePrice) * 100;
+                    System.out.printf("    Current Price: $%.2f\n", currentPrice);
+                    System.out.printf("    Current Value: $%.2f\n", currentValue);
+                    System.out.printf("    Performance: %.2f%% %s\n", Math.abs(percentChange), 
+                        percentChange > 0 ? "↑" : (percentChange < 0 ? "↓" : "−"));
+                } else {
+                    System.out.println("    Current Price: Not available");
+                    System.out.println("    Current Value: Not available");
+                    System.out.println("    Performance: Not available");
+                }
             }
+            
+            if (totalCost > 0) {
+                double portfolioPerformance = ((totalValue - totalCost) / totalCost) * 100;
+                System.out.printf("Total Portfolio Value: $%.2f\n", totalValue);
+                System.out.printf("Total Portfolio Performance: %.2f%% %s\n", 
+                    Math.abs(portfolioPerformance),
+                    portfolioPerformance > 0 ? "↑" : (portfolioPerformance < 0 ? "↓" : "−"));
+            } else {
+                System.out.println("Total Portfolio Value: $" + totalValue);
+                System.out.println("Total Portfolio Performance: N/A (no investments)");
+            }
+            System.out.println();
         }
     }
+}
 
     private static void createPortfolio() {
         System.out.print("Enter name for the new portfolio: ");
@@ -233,11 +271,9 @@ public class Main {
         String symbol = scanner.nextLine();
         System.out.print("Enter number of shares: ");
         int quantity = scanner.nextInt();
-        System.out.print("Enter price per share: $");
-        double price = scanner.nextDouble();
         scanner.nextLine();
 
-        portfolio.buyStock(symbol, quantity, price);
+        portfolio.buyStock(symbol, quantity);
     }
 
     private static void sellStock(Portfolio portfolio) {
@@ -245,11 +281,9 @@ public class Main {
         String symbol = scanner.nextLine();
         System.out.print("Enter number of shares: ");
         int quantity = scanner.nextInt();
-        System.out.print("Enter price per share: $");
-        double price = scanner.nextDouble();
         scanner.nextLine();
 
-        portfolio.sellStock(symbol, quantity, price);
+        portfolio.sellStock(symbol, quantity);
     }
 
     private static void showSocialMenu() {
@@ -431,7 +465,7 @@ public class Main {
         loggedInUser.deleteReview(listID);
     }
 
-     private static void analyzePortfolio(Portfolio portfolio) {
+    private static void analyzePortfolio(Portfolio portfolio) {
         try {
             LocalDate endDate = LocalDate.now();
             LocalDate startDate = endDate.minusYears(1);
@@ -465,33 +499,38 @@ public class Main {
     }
 
     private static void addNewStockData() {
-        Scanner scanner = new Scanner(System.in);
-        StockAnalyzer analyzer = new StockAnalyzer();
+    Scanner scanner = new Scanner(System.in);
+    StockAnalyzer analyzer = new StockAnalyzer();
 
-        System.out.print("Enter stock symbol: ");
-        String symbol = scanner.nextLine();
+    System.out.print("Enter stock symbol: ");
+    String symbol = scanner.nextLine();
 
-        System.out.print("Enter date (YYYY-MM-DD): ");
-        LocalDate date = LocalDate.parse(scanner.nextLine());
+    System.out.print("Enter date (YYYY-MM-DD): ");
+    LocalDate date = LocalDate.parse(scanner.nextLine());
 
-        System.out.print("Enter open price: ");
-        double open = scanner.nextDouble();
+    if (date.isBefore(LocalDate.of(2018, 2, 8))) {
+        System.out.println("Cannot add data before 2018-02-08. Historical data is read-only.");
+        return;
+    }
 
-        System.out.print("Enter high price: ");
-        double high = scanner.nextDouble();
+    System.out.print("Enter open price: ");
+    double open = scanner.nextDouble();
 
-        System.out.print("Enter low price: ");
-        double low = scanner.nextDouble();
+    System.out.print("Enter high price: ");
+    double high = scanner.nextDouble();
 
-        System.out.print("Enter close price: ");
-        double close = scanner.nextDouble();
+    System.out.print("Enter low price: ");
+    double low = scanner.nextDouble();
 
-        System.out.print("Enter volume: ");
-        int volume = scanner.nextInt();
+    System.out.print("Enter close price: ");
+    double close = scanner.nextDouble();
 
-        try {
-            analyzer.addNewStockData(symbol, date, open, high, low, close, volume);
-            System.out.println("New stock data added successfully.");
+    System.out.print("Enter volume: ");
+    int volume = scanner.nextInt();
+
+    try {
+        analyzer.addNewStockData(symbol, date, open, high, low, close, volume);
+        System.out.println("New stock data added successfully.");
         } catch (SQLException e) {
             System.out.println("Error adding new stock data: " + e.getMessage());
         }
@@ -548,7 +587,7 @@ public class Main {
             System.out.println("\nPrice Predictions (next 7 days):");
             List<Double> predictions = analyzer.predictFuturePrice(symbol, endDate, 7);
             for (int i = 0; i < predictions.size(); i++) {
-                System.out.println("Day " + (i+1) + ": " + predictions.get(i));
+                System.out.printf("Day %d: $%.2f\n", i+1, predictions.get(i));
             }
 
         } catch (SQLException e) {

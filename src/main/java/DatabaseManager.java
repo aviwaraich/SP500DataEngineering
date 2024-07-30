@@ -8,7 +8,7 @@ public class DatabaseManager {
     private static HikariDataSource ds;
 
     static {
-        config.setJdbcUrl("jdbc:postgresql://34.70.131.164/mydb");
+        config.setJdbcUrl("jdbc:postgresql://35.232.213.157/mydb");
         config.setUsername("postgres");
         config.setPassword("postgres");
         config.addDataSourceProperty("cachePrepStmts", "true");

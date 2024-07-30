@@ -1,15 +1,17 @@
+
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
-import java.util.ArrayList;
-import java.util.List;
 import java.time.LocalDate;
-import java.util.Map;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 public class Portfolio {
+
     private String name;
     private String username;
     private double cashBalance;
@@ -24,19 +26,41 @@ public class Portfolio {
         this.analyzer = new StockAnalyzer();
     }
 
-    public String getName() { return name; }
-    public String getUsername() { return username; }
-    public double getCashBalance() { return cashBalance; }
-    public void setCashBalance(double cashBalance) { this.cashBalance = cashBalance; }
-    public List<StockHolding> getHoldings() { return holdings; }
+    public String getName() {
+        return name;
+    }
 
-    public void buyStock(String symbol, int quantity, double price) {
-        double cost = quantity * price;
+    public String getUsername() {
+        return username;
+    }
+
+    public double getCashBalance() {
+        return cashBalance;
+    }
+
+    public void setCashBalance(double cashBalance) {
+        this.cashBalance = cashBalance;
+    }
+
+    public List<StockHolding> getHoldings() {
+        return holdings;
+    }
+
+    public void buyStock(String symbol, int quantity) {
+        double latestPrice = getLatestClosePrice(symbol);
+        if (latestPrice == -1) {
+            System.out.println("Unable to retrieve the latest price for " + symbol);
+            return;
+        }
+
+        double cost = quantity * latestPrice;
         if (cost <= cashBalance) {
             String updatePortfolioSql = "UPDATE Portfolio SET CashBalance = CashBalance - ? WHERE Name = ? AND Username = ?";
-            String upsertHoldingSql = "INSERT INTO StockHolding (PortfolioName, Username, Symbol, Shares) " +
-                                      "VALUES (?, ?, ?, ?) " +
-                                      "ON CONFLICT (PortfolioName, Username, Symbol) DO UPDATE SET Shares = StockHolding.Shares + ?";
+            String upsertHoldingSql = "INSERT INTO StockHolding (PortfolioName, Username, Symbol, Shares, AveragePurchasePrice) "
+                    + "VALUES (?, ?, ?, ?, ?) "
+                    + "ON CONFLICT (PortfolioName, Username, Symbol) DO UPDATE SET "
+                    + "Shares = StockHolding.Shares + EXCLUDED.Shares, "
+                    + "AveragePurchasePrice = (StockHolding.AveragePurchasePrice * StockHolding.Shares + EXCLUDED.AveragePurchasePrice * EXCLUDED.Shares) / (StockHolding.Shares + EXCLUDED.Shares)";
 
             try (Connection conn = DatabaseManager.getConnection()) {
                 conn.setAutoCommit(false);
@@ -61,7 +85,8 @@ public class Portfolio {
 
                     conn.commit();
                     cashBalance -= cost;
-                    updateLocalHoldings(symbol, quantity);
+                    updateLocalHoldings(symbol, quantity, latestPrice);
+                    refreshCashBalance();
                     System.out.println("Bought " + quantity + " shares of " + symbol + " for $" + cost);
                 } catch (SQLException e) {
                     conn.rollback();
@@ -79,11 +104,18 @@ public class Portfolio {
         }
     }
 
-    public void sellStock(String symbol, int quantity, double price) {
+    public void sellStock(String symbol, int quantity) {
+        double latestPrice = getLatestClosePrice(symbol);
+        if (latestPrice == -1) {
+            System.out.println("Unable to retrieve the latest price for " + symbol);
+            return;
+        }
+
         String checkSharesSql = "SELECT Shares FROM StockHolding WHERE PortfolioName = ? AND Username = ? AND Symbol = ?";
         String updatePortfolioSql = "UPDATE Portfolio SET CashBalance = CashBalance + ? WHERE Name = ? AND Username = ?";
-        String updateHoldingSql = "UPDATE StockHolding SET Shares = Shares - ? " +
-                                  "WHERE PortfolioName = ? AND Username = ? AND Symbol = ?";
+        String updateHoldingSql = "UPDATE StockHolding SET Shares = Shares - ?, "
+                + "AveragePurchasePrice = CASE WHEN Shares - ? > 0 THEN AveragePurchasePrice ELSE 0 END "
+                + "WHERE PortfolioName = ? AND Username = ? AND Symbol = ?";
         String deleteHoldingSql = "DELETE FROM StockHolding WHERE PortfolioName = ? AND Username = ? AND Symbol = ? AND Shares = 0";
 
         try (Connection conn = DatabaseManager.getConnection()) {
@@ -102,7 +134,7 @@ public class Portfolio {
                 }
 
                 if (availableShares >= quantity) {
-                    double earnings = quantity * price;
+                    double earnings = quantity * latestPrice;
 
                     // Update portfolio cash balance
                     try (PreparedStatement pstmt = conn.prepareStatement(updatePortfolioSql)) {
@@ -131,7 +163,8 @@ public class Portfolio {
 
                     conn.commit();
                     cashBalance += earnings;
-                    updateLocalHoldings(symbol, -quantity);
+                    updateLocalHoldings(symbol, -quantity, latestPrice);
+                    refreshCashBalance();
                     System.out.println("Sold " + quantity + " shares of " + symbol + " for $" + earnings);
                 } else {
                     System.out.println("Insufficient shares to sell.");
@@ -147,6 +180,21 @@ public class Portfolio {
             System.out.println("Database operation failed.");
             e.printStackTrace();
         }
+    }
+
+    public double getLatestClosePrice(String symbol) {
+        String sql = "SELECT close FROM Stocks WHERE symbol = ? ORDER BY timestamp DESC LIMIT 1";
+        try (Connection conn = DatabaseManager.getConnection(); PreparedStatement pstmt = conn.prepareStatement(sql)) {
+            pstmt.setString(1, symbol);
+            try (ResultSet rs = pstmt.executeQuery()) {
+                if (rs.next()) {
+                    return rs.getDouble("close");
+                }
+            }
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+        return -1;
     }
 
     public void withdraw(double amount) {
@@ -183,10 +231,13 @@ public class Portfolio {
         }
     }
 
-    private void updateLocalHoldings(String symbol, int quantityChange) {
+    private void updateLocalHoldings(String symbol, int quantityChange, double purchasePrice) {
         for (StockHolding holding : holdings) {
             if (holding.getSymbol().equals(symbol)) {
-                holding.setShares(holding.getShares() + quantityChange);
+                int newShares = holding.getShares() + quantityChange;
+                double newAveragePrice = (holding.getAveragePurchasePrice() * holding.getShares() + purchasePrice * quantityChange) / newShares;
+                holding.setShares(newShares);
+                holding.setAveragePurchasePrice(newAveragePrice);
                 if (holding.getShares() == 0) {
                     holdings.remove(holding);
                 }
@@ -194,22 +245,22 @@ public class Portfolio {
             }
         }
         if (quantityChange > 0) {
-            holdings.add(new StockHolding(symbol, quantityChange));
+            holdings.add(new StockHolding(symbol, quantityChange, purchasePrice));
         }
     }
 
     public void loadHoldings() {
         String sql = "SELECT * FROM StockHolding WHERE PortfolioName = ? AND Username = ?";
         holdings.clear();
-        try (Connection conn = DatabaseManager.getConnection();
-             PreparedStatement pstmt = conn.prepareStatement(sql)) {
+        try (Connection conn = DatabaseManager.getConnection(); PreparedStatement pstmt = conn.prepareStatement(sql)) {
             pstmt.setString(1, this.name);
             pstmt.setString(2, this.username);
             try (ResultSet rs = pstmt.executeQuery()) {
                 while (rs.next()) {
                     String symbol = rs.getString("Symbol");
                     int shares = rs.getInt("Shares");
-                    holdings.add(new StockHolding(symbol, shares));
+                    double averagePurchasePrice = rs.getDouble("AveragePurchasePrice");
+                    holdings.add(new StockHolding(symbol, shares, averagePurchasePrice));
                 }
             }
         } catch (SQLException e) {
@@ -234,8 +285,7 @@ public class Portfolio {
     public static boolean save(Portfolio portfolio) {
         String sql = "INSERT INTO Portfolio (name, username, cashbalance) VALUES (?, ?, ?)";
 
-        try (Connection conn = DatabaseManager.getConnection();
-             PreparedStatement pstmt = conn.prepareStatement(sql)) {
+        try (Connection conn = DatabaseManager.getConnection(); PreparedStatement pstmt = conn.prepareStatement(sql)) {
 
             pstmt.setString(1, portfolio.getName());
             pstmt.setString(2, portfolio.getUsername());
@@ -253,8 +303,7 @@ public class Portfolio {
         List<Portfolio> portfolios = new ArrayList<>();
         String sql = "SELECT * FROM Portfolio WHERE username = ?";
 
-        try (Connection conn = DatabaseManager.getConnection();
-             PreparedStatement pstmt = conn.prepareStatement(sql)) {
+        try (Connection conn = DatabaseManager.getConnection(); PreparedStatement pstmt = conn.prepareStatement(sql)) {
 
             pstmt.setString(1, username);
 
@@ -264,6 +313,7 @@ public class Portfolio {
                     double cashBalance = rs.getDouble("cashbalance");
                     Portfolio portfolio = new Portfolio(portfolioName, username, cashBalance);
                     portfolio.loadHoldings();
+                    portfolio.refreshCashBalance();
                     portfolios.add(portfolio);
                 }
             }
@@ -273,22 +323,29 @@ public class Portfolio {
         return portfolios;
     }
 
-    public Map<String, Double> calculateBetas(LocalDate startDate, LocalDate endDate) throws SQLException {
-        Map<String, Double> betas = new HashMap<>();
-        for (StockHolding holding : holdings) {
-            double beta = analyzer.calculateBeta(holding.getSymbol(), startDate, endDate);
-            betas.put(holding.getSymbol(), beta);
+    public void refreshCashBalance() {
+        String sql = "SELECT CashBalance FROM Portfolio WHERE Name = ? AND Username = ?";
+        try (Connection conn = DatabaseManager.getConnection(); PreparedStatement pstmt = conn.prepareStatement(sql)) {
+            pstmt.setString(1, this.name);
+            pstmt.setString(2, this.username);
+            try (ResultSet rs = pstmt.executeQuery()) {
+                if (rs.next()) {
+                    this.cashBalance = rs.getDouble("CashBalance");
+                }
+            }
+        } catch (SQLException e) {
+            e.printStackTrace();
         }
-        return betas;
+    }
+
+    public Map<String, Double> calculateBetas(LocalDate startDate, LocalDate endDate) throws SQLException {
+        List<String> symbols = holdings.stream().map(StockHolding::getSymbol).collect(Collectors.toList());
+        return analyzer.calculateBetass(symbols, startDate, endDate);
     }
 
     public Map<String, Double> calculateCoVs(LocalDate startDate, LocalDate endDate) throws SQLException {
-        Map<String, Double> covs = new HashMap<>();
-        for (StockHolding holding : holdings) {
-            double cov = analyzer.calculateCoV(holding.getSymbol(), startDate, endDate);
-            covs.put(holding.getSymbol(), cov);
-        }
-        return covs;
+        List<String> symbols = holdings.stream().map(StockHolding::getSymbol).collect(Collectors.toList());
+        return analyzer.calculateCoVss(symbols, startDate, endDate);
     }
 
     public Map<String, Map<String, Double>> calculateCorrelationMatrix(LocalDate startDate, LocalDate endDate) throws SQLException {

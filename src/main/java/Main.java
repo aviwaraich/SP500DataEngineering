@@ -220,7 +220,9 @@ public class Main {
         System.out.println("3. Sell Stock");
         System.out.println("4. Deposit Cash");
         System.out.println("5. Withdraw Cash");
-        System.out.println("6. Return to Main Menu");
+        System.out.println("6. View Stock History");
+        System.out.println("7. Predict Future Prices");
+        System.out.println("8. Return to Main Menu");
         System.out.print("Choose an option: ");
 
         int choice = scanner.nextInt();
@@ -243,10 +245,16 @@ public class Main {
                 withdrawCash(portfolio);
                 break;
             case 6:
+                viewStockHistory(portfolio);
+                break;
+            case 7:
+                predictFuturePrices(portfolio);
+                break;
+            case 8:
                 return;
             default:
                 System.out.println("Invalid option. Please try again.");
-            }
+        }
         }
     }
 
@@ -599,6 +607,32 @@ public class Main {
             analyzer.closeConnection();
         }
     }
+
+    public void viewStockHistory(String symbol) throws SQLException {
+    List<Map<String, Object>> historicalPrices = analyzer.getHistoricalPrices(symbol);
+    
+    System.out.println("Full Historical Prices for " + symbol);
+    System.out.println("Date\t\tPrice");
+    System.out.println("--------------------");
+    
+    for (Map<String, Object> dataPoint : historicalPrices) {
+        LocalDate date = (LocalDate) dataPoint.get("date");
+        double price = (double) dataPoint.get("price");
+        System.out.printf("%s\t$%.2f\n", date, price);
+    }
+    
+    displayASCIIChart_Historical(historicalPrices);
+}
+
+private static void predictFuturePrices(Portfolio portfolio) {
+    System.out.print("Enter stock symbol: ");
+    String symbol = scanner.nextLine();
+    try {
+        portfolio.predictFuturePrices(symbol);
+    } catch (SQLException e) {
+        System.out.println("Error predicting future prices: " + e.getMessage());
+    }
+}
 }
 
 

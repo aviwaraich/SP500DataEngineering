@@ -270,6 +270,24 @@ public class StockAnalyzer {
         return new double[]{slope, intercept};
     }
 
+    public List<Map<String, Object>> getHistoricalPrices(String symbol, LocalDate startDate, LocalDate endDate) throws SQLException {
+    List<Map<String, Object>> historicalPrices = new ArrayList<>();
+    String sql = "SELECT timestamp, close FROM Stocks WHERE symbol = ? ORDER BY timestamp";
+
+    try (PreparedStatement pstmt = conn.prepareStatement(sql)) {
+        pstmt.setString(1, symbol);
+
+        ResultSet rs = pstmt.executeQuery();
+        while (rs.next()) {
+            Map<String, Object> dataPoint = new HashMap<>();
+            dataPoint.put("date", rs.getDate("timestamp").toLocalDate());
+            dataPoint.put("price", rs.getDouble("close"));
+            historicalPrices.add(dataPoint);
+        }
+    }
+    return historicalPrices;
+}
+
     public void closeConnection() {
         if (conn != null) {
             try {

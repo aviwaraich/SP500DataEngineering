@@ -363,4 +363,73 @@ public class Portfolio {
         }
         return predictions;
     }
+
+    public void viewStockHistory(String symbol) throws SQLException {
+    LocalDate endDate = LocalDate.now();
+    LocalDate startDate = endDate.minusYears(1);  // Get 1 year of historical data
+
+    List<Map<String, Object>> historicalPrices = analyzer.getHistoricalPrices(symbol, startDate, endDate);
+    
+    System.out.println("Historical Prices for " + symbol);
+    System.out.println("Date\t\tPrice");
+    System.out.println("--------------------");
+    
+    for (Map<String, Object> dataPoint : historicalPrices) {
+        LocalDate date = (LocalDate) dataPoint.get("date");
+        double price = (double) dataPoint.get("price");
+        System.out.printf("%s\t$%.2f\n", date, price);
+    }
+    
+    displayASCIIChart_Historical(historicalPrices);
+}
+
+public void predictFuturePrices(String symbol) throws SQLException {
+    LocalDate startDate = LocalDate.now();
+    int daysToPredict = 30;  // Predict for the next 30 days
+
+    List<Double> predictions = analyzer.predictFuturePrice(symbol, startDate, daysToPredict);
+    
+    System.out.println("Price Predictions for " + symbol);
+    System.out.println("Day\tPredicted Price");
+    System.out.println("--------------------");
+    
+    for (int i = 0; i < predictions.size(); i++) {
+        System.out.printf("%d\t$%.2f\n", i+1, predictions.get(i));
+    }
+    
+    displayASCIIChart_Prediction(predictions);
+}
+
+private void displayASCIIChart_Historical(List<Map<String, Object>> data) {
+    int chartWidth = 50;
+    double min = data.stream().mapToDouble(d -> (double) d.get("price")).min().orElse(0);
+    double max = data.stream().mapToDouble(d -> (double) d.get("price")).max().orElse(0);
+    
+    System.out.println("\nHistorical Price Chart:");
+    System.out.println("Date       Price   Chart");
+    System.out.println("-----------------------------");
+    
+    for (Map<String, Object> point : data) {
+        LocalDate date = (LocalDate) point.get("date");
+        double price = (double) point.get("price");
+        int barLength = (int) ((price - min) / (max - min) * chartWidth);
+        System.out.printf("%s $%.2f |%s\n", date, price, "=".repeat(barLength));
+    }
+}
+
+private void displayASCIIChart_Prediction(List<Double> data) {
+    int chartWidth = 50;
+    double min = data.stream().mapToDouble(Double::doubleValue).min().orElse(0);
+    double max = data.stream().mapToDouble(Double::doubleValue).max().orElse(0);
+    
+    System.out.println("\nPrice Prediction Chart:");
+    System.out.println("Day   Price   Chart");
+    System.out.println("-----------------------------");
+    
+    for (int i = 0; i < data.size(); i++) {
+        double price = data.get(i);
+        int barLength = (int) ((price - min) / (max - min) * chartWidth);
+        System.out.printf("%-5d $%.2f |%s\n", i + 1, price, "=".repeat(barLength));
+    }
+}
 }

@@ -499,40 +499,43 @@ public class Main {
     }
 
     private static void addNewStockData() {
-    Scanner scanner = new Scanner(System.in);
-    StockAnalyzer analyzer = new StockAnalyzer();
+        Scanner scanner = new Scanner(System.in);
+        StockAnalyzer analyzer = new StockAnalyzer();
 
-    System.out.print("Enter stock symbol: ");
-    String symbol = scanner.nextLine();
+        System.out.print("Enter stock symbol: ");
+        String symbol = scanner.nextLine();
 
-    System.out.print("Enter date (YYYY-MM-DD): ");
-    LocalDate date = LocalDate.parse(scanner.nextLine());
+        System.out.print("Enter date (YYYY-MM-DD): ");
+        LocalDate date = LocalDate.parse(scanner.nextLine());
 
-    if (date.isBefore(LocalDate.of(2018, 2, 8))) {
-        System.out.println("Cannot add data before 2018-02-08. Historical data is read-only.");
-        return;
-    }
+        if (date.isBefore(LocalDate.of(2018, 2, 8))) {
+            System.out.println("Cannot add data before 2018-02-08. Historical data is read-only.");
+            return;
+        }
 
-    System.out.print("Enter open price: ");
-    double open = scanner.nextDouble();
+        System.out.print("Enter open price: ");
+        double open = scanner.nextDouble();
 
-    System.out.print("Enter high price: ");
-    double high = scanner.nextDouble();
+        System.out.print("Enter high price: ");
+        double high = scanner.nextDouble();
 
-    System.out.print("Enter low price: ");
-    double low = scanner.nextDouble();
+        System.out.print("Enter low price: ");
+        double low = scanner.nextDouble();
 
-    System.out.print("Enter close price: ");
-    double close = scanner.nextDouble();
+        System.out.print("Enter close price: ");
+        double close = scanner.nextDouble();
 
-    System.out.print("Enter volume: ");
-    int volume = scanner.nextInt();
+        System.out.print("Enter volume: ");
+        int volume = scanner.nextInt();
 
-    try {
-        analyzer.addNewStockData(symbol, date, open, high, low, close, volume);
-        System.out.println("New stock data added successfully.");
+        try {
+            analyzer.addNewStockData(symbol, date, open, high, low, close, volume);
+            System.out.println("New stock data added successfully.");
         } catch (SQLException e) {
             System.out.println("Error adding new stock data: " + e.getMessage());
+            e.printStackTrace(); // This will print the full stack trace for debugging
+        } finally {
+            analyzer.closeConnection();
         }
     }
 

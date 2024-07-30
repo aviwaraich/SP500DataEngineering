@@ -116,14 +116,14 @@ public class StockAnalyzer {
     }
 
     public void addNewStockData(String symbol, LocalDate date, double open, double high, double low, double close, int volume) throws SQLException {
-        String sql = "INSERT INTO Stocks (Date, Symbol, Open, High, Low, Close, Volume) "
+        String sql = "INSERT INTO Stocks (timestamp, Symbol, Open, High, Low, Close, Volume) "
                 + "VALUES (?, ?, ?, ?, ?, ?, ?) "
-                + "ON CONFLICT (Date, Symbol) DO UPDATE SET "
+                + "ON CONFLICT (timestamp, Symbol) DO UPDATE SET "
                 + "Open = EXCLUDED.Open, High = EXCLUDED.High, Low = EXCLUDED.Low, "
                 + "Close = EXCLUDED.Close, Volume = EXCLUDED.Volume";
 
         try (PreparedStatement pstmt = conn.prepareStatement(sql)) {
-            pstmt.setDate(1, java.sql.Date.valueOf(date));
+            pstmt.setTimestamp(1, java.sql.Timestamp.valueOf(date.atStartOfDay()));
             pstmt.setString(2, symbol);
             pstmt.setDouble(3, open);
             pstmt.setDouble(4, high);

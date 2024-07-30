@@ -47,62 +47,62 @@ public class Portfolio {
     }
 
     public void buyStock(String symbol, int quantity) {
-        double latestPrice = getLatestClosePrice(symbol);
-        if (latestPrice == -1) {
-            System.out.println("Unable to retrieve the latest price for " + symbol);
-            return;
-        }
-
-        double cost = quantity * latestPrice;
-        if (cost <= cashBalance) {
-            String updatePortfolioSql = "UPDATE Portfolio SET CashBalance = CashBalance - ? WHERE Name = ? AND Username = ?";
-            String upsertHoldingSql = "INSERT INTO StockHolding (PortfolioName, Username, Symbol, Shares, AveragePurchasePrice) "
-                    + "VALUES (?, ?, ?, ?, ?) "
-                    + "ON CONFLICT (PortfolioName, Username, Symbol) DO UPDATE SET "
-                    + "Shares = StockHolding.Shares + EXCLUDED.Shares, "
-                    + "AveragePurchasePrice = (StockHolding.AveragePurchasePrice * StockHolding.Shares + EXCLUDED.AveragePurchasePrice * EXCLUDED.Shares) / (StockHolding.Shares + EXCLUDED.Shares)";
-
-            try (Connection conn = DatabaseManager.getConnection()) {
-                conn.setAutoCommit(false);
-                try {
-                    // Update portfolio cash balance
-                    try (PreparedStatement pstmt = conn.prepareStatement(updatePortfolioSql)) {
-                        pstmt.setDouble(1, cost);
-                        pstmt.setString(2, this.name);
-                        pstmt.setString(3, this.username);
-                        pstmt.executeUpdate();
-                    }
-
-                    // Update or insert stock holding
-                    try (PreparedStatement pstmt = conn.prepareStatement(upsertHoldingSql)) {
-                        pstmt.setString(1, this.name);
-                        pstmt.setString(2, this.username);
-                        pstmt.setString(3, symbol);
-                        pstmt.setInt(4, quantity);
-                        pstmt.setInt(5, quantity);
-                        pstmt.executeUpdate();
-                    }
-
-                    conn.commit();
-                    cashBalance -= cost;
-                    updateLocalHoldings(symbol, quantity, latestPrice);
-                    refreshCashBalance();
-                    System.out.println("Bought " + quantity + " shares of " + symbol + " for $" + cost);
-                } catch (SQLException e) {
-                    conn.rollback();
-                    System.out.println("Transaction failed. Rolling back.");
-                    e.printStackTrace();
-                } finally {
-                    conn.setAutoCommit(true);
-                }
-            } catch (SQLException e) {
-                System.out.println("Database operation failed.");
-                e.printStackTrace();
-            }
-        } else {
-            System.out.println("Insufficient funds to buy stocks.");
-        }
+    double latestPrice = getLatestClosePrice(symbol);
+    if (latestPrice == -1) {
+        System.out.println("Unable to retrieve the latest price for " + symbol);
+        return;
     }
+
+    double cost = quantity * latestPrice;
+    if (cost <= cashBalance) {
+        String updatePortfolioSql = "UPDATE Portfolio SET CashBalance = CashBalance - ? WHERE Name = ? AND Username = ?";
+        String upsertHoldingSql = "INSERT INTO StockHolding (PortfolioName, Username, Symbol, Shares, AveragePurchasePrice) "
+                + "VALUES (?, ?, ?, ?, ?) "
+                + "ON CONFLICT (PortfolioName, Username, Symbol) DO UPDATE SET "
+                + "Shares = StockHolding.Shares + EXCLUDED.Shares, "
+                + "AveragePurchasePrice = (StockHolding.AveragePurchasePrice * StockHolding.Shares + EXCLUDED.AveragePurchasePrice * EXCLUDED.Shares) / (StockHolding.Shares + EXCLUDED.Shares)";
+
+        try (Connection conn = DatabaseManager.getConnection()) {
+            conn.setAutoCommit(false);
+            try {
+                // Update portfolio cash balance
+                try (PreparedStatement pstmt = conn.prepareStatement(updatePortfolioSql)) {
+                    pstmt.setDouble(1, cost);
+                    pstmt.setString(2, this.name);
+                    pstmt.setString(3, this.username);
+                    pstmt.executeUpdate();
+                }
+
+                // Update or insert stock holding
+                try (PreparedStatement pstmt = conn.prepareStatement(upsertHoldingSql)) {
+                    pstmt.setString(1, this.name);
+                    pstmt.setString(2, this.username);
+                    pstmt.setString(3, symbol);
+                    pstmt.setInt(4, quantity);
+                    pstmt.setDouble(5, latestPrice);
+                    pstmt.executeUpdate();
+                }
+
+                conn.commit();
+                cashBalance -= cost;
+                updateLocalHoldings(symbol, quantity, latestPrice);
+                refreshCashBalance();
+                System.out.println("Bought " + quantity + " shares of " + symbol + " for $" + cost);
+            } catch (SQLException e) {
+                conn.rollback();
+                System.out.println("Transaction failed. Rolling back.");
+                e.printStackTrace();
+            } finally {
+                conn.setAutoCommit(true);
+            }
+        } catch (SQLException e) {
+            System.out.println("Database operation failed.");
+            e.printStackTrace();
+        }
+    } else {
+        System.out.println("Insufficient funds to buy stocks.");
+    }
+}
 
     public void sellStock(String symbol, int quantity) {
         double latestPrice = getLatestClosePrice(symbol);
@@ -183,19 +183,21 @@ public class Portfolio {
     }
 
     public double getLatestClosePrice(String symbol) {
-        String sql = "SELECT close FROM Stocks WHERE symbol = ? ORDER BY timestamp DESC LIMIT 1";
-        try (Connection conn = DatabaseManager.getConnection(); PreparedStatement pstmt = conn.prepareStatement(sql)) {
-            pstmt.setString(1, symbol);
-            try (ResultSet rs = pstmt.executeQuery()) {
-                if (rs.next()) {
-                    return rs.getDouble("close");
-                }
+    String sql = "SELECT close FROM Stocks WHERE symbol = ? AND timestamp <= ? ORDER BY timestamp DESC LIMIT 1";
+    try (Connection conn = DatabaseManager.getConnection(); 
+         PreparedStatement pstmt = conn.prepareStatement(sql)) {
+        pstmt.setString(1, symbol);
+        pstmt.setTimestamp(2, java.sql.Timestamp.valueOf(LocalDate.now().atStartOfDay()));
+        try (ResultSet rs = pstmt.executeQuery()) {
+            if (rs.next()) {
+                return rs.getDouble("close");
             }
-        } catch (SQLException e) {
-            e.printStackTrace();
         }
-        return -1;
+    } catch (SQLException e) {
+        e.printStackTrace();
     }
+    return -1;
+}
 
     public void withdraw(double amount) {
         if (amount <= cashBalance) {

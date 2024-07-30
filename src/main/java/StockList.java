@@ -1,57 +1,21 @@
-import java.sql.SQLException;
-import java.time.LocalDate;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.List;
 
 public class StockList {
     private int listID;
-    private String owner;
     private String name;
     private boolean isPublic;
-    private List<String> symbols;
+    private String creator;
+    private List<StockHolding> stocks;
+    private List<Review> reviews;
 
-    // Constructor and other methods
-
-    public Map<String, Double> calculateBetas(LocalDate startDate, LocalDate endDate) throws SQLException {
-        StockAnalyzer analyzer = new StockAnalyzer();
-        Map<String, Double> betas = new HashMap<>();
-
-        for (String symbol : symbols) {
-            betas.put(symbol, analyzer.calculateBeta(symbol, startDate, endDate));
-        }
-
-        analyzer.closeConnection();
-        return betas;
-    }
-
-    public Map<String, Double> calculateCoVs(LocalDate startDate, LocalDate endDate) throws SQLException {
-        StockAnalyzer analyzer = new StockAnalyzer();
-        Map<String, Double> covs = new HashMap<>();
-
-        for (String symbol : symbols) {
-            covs.put(symbol, analyzer.calculateCoV(symbol, startDate, endDate));
-        }
-
-        analyzer.closeConnection();
-        return covs;
-    }
-
-    public Map<String, Map<String, Double>> calculateCorrelationMatrix(LocalDate startDate, LocalDate endDate) throws SQLException {
-        StockAnalyzer analyzer = new StockAnalyzer();
-        Map<String, Map<String, Double>> correlationMatrix = analyzer.calculateCorrelationMatrix(symbols, startDate, endDate);
-        analyzer.closeConnection();
-        return correlationMatrix;
-    }
-
-    public Map<String, List<Double>> predictFuturePrices(LocalDate startDate, int daysToPredict) throws SQLException {
-        StockAnalyzer analyzer = new StockAnalyzer();
-        Map<String, List<Double>> predictions = new HashMap<>();
-
-        for (String symbol : symbols) {
-            predictions.put(symbol, analyzer.predictFuturePrice(symbol, startDate, daysToPredict));
-        }
-
-        analyzer.closeConnection();
-        return predictions;
+    public StockList(int listID, String name, boolean isPublic, String creator) {
+        this.listID = listID;
+        this.name = name;
+        this.isPublic = isPublic;
+        this.creator = creator;
+        this.stocks = new ArrayList<>();
+        this.reviews = new ArrayList<>();
     }
 
     public int getListID() {
@@ -66,8 +30,8 @@ public class StockList {
         return isPublic;
     }
 
-    public String getCreatorUsername() {
-        return creatorUsername;
+    public String getCreator() {
+        return creator;
     }
 
     public List<StockHolding> getStocks() {
@@ -90,7 +54,7 @@ public class StockList {
     // Overriding toString() method for better representation
     @Override
     public String toString() {
-        return "Stock List ID: " + listID + ", Name: " + name + ", Public: " + isPublic + ", Creator: " + creatorUsername;
+        return "Stock List ID: " + listID + ", Name: " + name + ", Public: " + isPublic + ", Creator: " + creator;
     }
 
     // Method to view details of the stock list

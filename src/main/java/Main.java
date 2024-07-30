@@ -166,43 +166,67 @@ public class Main {
     }
 
     private static void managePortfolio() {
-        System.out.print("Enter portfolio name: ");
-        String name = scanner.nextLine();
+    System.out.print("Enter portfolio name: ");
+    String name = scanner.nextLine();
 
-        Portfolio portfolio = loggedInUser.getPortfolio(name);
-        if (portfolio == null) {
-            System.out.println("Portfolio not found.");
-            return;
-        }
+    Portfolio portfolio = loggedInUser.getPortfolio(name);
+    if (portfolio == null) {
+        System.out.println("Portfolio not found.");
+        return;
+    }
 
-        while (true) {
-            System.out.println("\n--- Manage Portfolio ---");
-            System.out.println("1. View Portfolio Details");
-            System.out.println("2. Buy Stock");
-            System.out.println("3. Sell Stock");
-            System.out.println("4. Return to Main Menu");
-            System.out.print("Choose an option: ");
+    while (true) {
+        System.out.println("\n--- Manage Portfolio ---");
+        System.out.println("1. View Portfolio Details");
+        System.out.println("2. Buy Stock");
+        System.out.println("3. Sell Stock");
+        System.out.println("4. Deposit Cash");
+        System.out.println("5. Withdraw Cash");
+        System.out.println("6. Return to Main Menu");
+        System.out.print("Choose an option: ");
 
-            int choice = scanner.nextInt();
-            scanner.nextLine();
+        int choice = scanner.nextInt();
+        scanner.nextLine();
 
-            switch (choice) {
-                case 1:
-                    portfolio.viewDetails();
-                    break;
-                case 2:
-                    buyStock(portfolio);
-                    break;
-                case 3:
-                    sellStock(portfolio);
-                    break;
-                case 4:
-                    return;
-                default:
-                    System.out.println("Invalid option. Please try again.");
+        switch (choice) {
+            case 1:
+                portfolio.viewDetails();
+                break;
+            case 2:
+                buyStock(portfolio);
+                break;
+            case 3:
+                sellStock(portfolio);
+                break;
+            case 4:
+                depositCash(portfolio);
+                break;
+            case 5:
+                withdrawCash(portfolio);
+                break;
+            case 6:
+                return;
+            default:
+                System.out.println("Invalid option. Please try again.");
             }
         }
     }
+
+    private static void depositCash(Portfolio portfolio) {
+        System.out.print("Enter amount to deposit: $");
+        double amount = scanner.nextDouble();
+        scanner.nextLine();
+        portfolio.setCashBalance(portfolio.getCashBalance() + amount);
+        System.out.println("Deposited $" + amount);
+    }
+
+    private static void withdrawCash(Portfolio portfolio) {
+        System.out.print("Enter amount to withdraw: $");
+        double amount = scanner.nextDouble();
+        scanner.nextLine();
+        portfolio.withdraw(amount);
+    }
+
 
     private static void buyStock(Portfolio portfolio) {
         System.out.print("Enter stock symbol: ");
@@ -522,10 +546,10 @@ public class Main {
             }
 
             System.out.println("\nPrice Predictions (next 7 days):");
-            //List<Double> predictions = analyzer.predictFuturePrice(symbol, endDate, 7);
-            //for (int i = 0; i < predictions.size(); i++) {
-            //    System.out.println("Day " + (i+1) + ": " + predictions.get(i));
-            //}
+            List<Double> predictions = analyzer.predictFuturePrice(symbol, endDate, 7);
+            for (int i = 0; i < predictions.size(); i++) {
+                System.out.println("Day " + (i+1) + ": " + predictions.get(i));
+            }
 
         } catch (SQLException e) {
             System.out.println("Error analyzing stock: " + e.getMessage());

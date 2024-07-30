@@ -31,7 +31,6 @@ public class StockAnalyzer {
                 stockReturns.add(rs.getDouble("return"));
             }
         }
-        System.out.println("Stock Returns for symbol " + symbol + ": " + stockReturns);
 
         // If stock returns are empty, there is an issue with the stock data
         if (stockReturns.isEmpty()) {
@@ -207,7 +206,7 @@ public class StockAnalyzer {
         return new double[]{slope, intercept};
     }
 
-        public void addNewStockData(String symbol, LocalDate date, double open, double high, double low, double close, int volume) throws SQLException {
+    public void addNewStockData(String symbol, LocalDate date, double open, double high, double low, double close, int volume) throws SQLException {
         String sql = "INSERT INTO DailyStockData (Date, Symbol, Open, High, Low, Close, Volume) " +
                      "VALUES (?, ?, ?, ?, ?, ?, ?) " +
                      "ON CONFLICT (Date, Symbol) DO UPDATE SET " +
@@ -317,4 +316,3 @@ public class StockAnalyzer {
         }
     }
 }
-

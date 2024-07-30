@@ -5,10 +5,8 @@ import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.List;
 import java.time.LocalDate;
-import java.sql.SQLException;
 import java.util.Map;
 import java.util.HashMap;
-import java.util.List;
 import java.util.stream.Collectors;
 
 public class Portfolio {
@@ -151,6 +149,40 @@ public class Portfolio {
         }
     }
 
+    public void withdraw(double amount) {
+        if (amount <= cashBalance) {
+            String updatePortfolioSql = "UPDATE Portfolio SET CashBalance = CashBalance - ? WHERE Name = ? AND Username = ?";
+
+            try (Connection conn = DatabaseManager.getConnection()) {
+                conn.setAutoCommit(false);
+                try {
+                    // Update portfolio cash balance
+                    try (PreparedStatement pstmt = conn.prepareStatement(updatePortfolioSql)) {
+                        pstmt.setDouble(1, amount);
+                        pstmt.setString(2, this.name);
+                        pstmt.setString(3, this.username);
+                        pstmt.executeUpdate();
+                    }
+
+                    conn.commit();
+                    cashBalance -= amount;
+                    System.out.println("Withdrew $" + amount);
+                } catch (SQLException e) {
+                    conn.rollback();
+                    System.out.println("Transaction failed. Rolling back.");
+                    e.printStackTrace();
+                } finally {
+                    conn.setAutoCommit(true);
+                }
+            } catch (SQLException e) {
+                System.out.println("Database operation failed.");
+                e.printStackTrace();
+            }
+        } else {
+            System.out.println("Insufficient funds to withdraw.");
+        }
+    }
+
     private void updateLocalHoldings(String symbol, int quantityChange) {
         for (StockHolding holding : holdings) {
             if (holding.getSymbol().equals(symbol)) {
@@ -267,7 +299,7 @@ public class Portfolio {
     public Map<String, List<Double>> predictFuturePrices(LocalDate startDate, int daysToPredict) throws SQLException {
         Map<String, List<Double>> predictions = new HashMap<>();
         for (StockHolding holding : holdings) {
-            List<Double> prediction = analyzer.predictFuturePrice(holding.getSymbol(), startDate, startDate.plusDays(daysToPredict), daysToPredict);
+            List<Double> prediction = analyzer.predictFuturePrice(holding.getSymbol(), startDate, daysToPredict);
             predictions.put(holding.getSymbol(), prediction);
         }
         return predictions;

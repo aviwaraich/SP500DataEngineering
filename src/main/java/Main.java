@@ -8,6 +8,7 @@ public class Main {
 
     private static User loggedInUser = null;
     private static Scanner scanner = new Scanner(System.in);
+    private static StockAnalyzer analyzer = new StockAnalyzer();
 
     public static void main(String[] args) {
         while (true) {
@@ -102,7 +103,6 @@ public class Main {
         }
     }
 
-
     private static void register() {
         System.out.print("Enter new username: ");
         String username = scanner.nextLine();
@@ -132,58 +132,58 @@ public class Main {
     }
 
     private static void viewPortfolios() {
-    List<Portfolio> portfolios = loggedInUser.getPortfolios();
-    if (portfolios.isEmpty()) {
-        System.out.println("You don't have any portfolios yet.");
-    } else {
-        System.out.println("\n--- Your Portfolios ---");
-        for (Portfolio portfolio : portfolios) {
-            double totalValue = portfolio.getCashBalance();
-            double totalCost = 0;
-            System.out.println("Portfolio Name: " + portfolio.getName());
-            System.out.printf("Cash Balance: $%.2f\n", portfolio.getCashBalance());
-            System.out.println("Holdings:");
-            
-            for (StockHolding holding : portfolio.getHoldings()) {
-                String symbol = holding.getSymbol();
-                int shares = holding.getShares();
-                double currentPrice = portfolio.getLatestClosePrice(symbol);
-                double purchasePrice = holding.getAveragePurchasePrice();
-                double currentValue = shares * currentPrice;
-                double cost = shares * purchasePrice;
+        List<Portfolio> portfolios = loggedInUser.getPortfolios();
+        if (portfolios.isEmpty()) {
+            System.out.println("You don't have any portfolios yet.");
+        } else {
+            System.out.println("\n--- Your Portfolios ---");
+            for (Portfolio portfolio : portfolios) {
+                double totalValue = portfolio.getCashBalance();
+                double totalCost = 0;
+                System.out.println("Portfolio Name: " + portfolio.getName());
+                System.out.printf("Cash Balance: $%.2f\n", portfolio.getCashBalance());
+                System.out.println("Holdings:");
                 
-                totalValue += currentValue;
-                totalCost += cost;
-                
-                System.out.printf("  %s: %d shares\n", symbol, shares);
-                System.out.printf("    Purchase Price: $%.2f\n", purchasePrice);
-                if (currentPrice != -1) {
-                    double percentChange = ((currentPrice - purchasePrice) / purchasePrice) * 100;
-                    System.out.printf("    Current Price: $%.2f\n", currentPrice);
-                    System.out.printf("    Current Value: $%.2f\n", currentValue);
-                    System.out.printf("    Performance: %.2f%% %s\n", Math.abs(percentChange), 
-                        percentChange > 0 ? "↑" : (percentChange < 0 ? "↓" : "−"));
-                } else {
-                    System.out.println("    Current Price: Not available");
-                    System.out.println("    Current Value: Not available");
-                    System.out.println("    Performance: Not available");
+                for (StockHolding holding : portfolio.getHoldings()) {
+                    String symbol = holding.getSymbol();
+                    int shares = holding.getShares();
+                    double currentPrice = portfolio.getLatestClosePrice(symbol);
+                    double purchasePrice = holding.getAveragePurchasePrice();
+                    double currentValue = shares * currentPrice;
+                    double cost = shares * purchasePrice;
+                    
+                    totalValue += currentValue;
+                    totalCost += cost;
+                    
+                    System.out.printf("  %s: %d shares\n", symbol, shares);
+                    System.out.printf("    Purchase Price: $%.2f\n", purchasePrice);
+                    if (currentPrice != -1) {
+                        double percentChange = ((currentPrice - purchasePrice) / purchasePrice) * 100;
+                        System.out.printf("    Current Price: $%.2f\n", currentPrice);
+                        System.out.printf("    Current Value: $%.2f\n", currentValue);
+                        System.out.printf("    Performance: %.2f%% %s\n", Math.abs(percentChange), 
+                            percentChange > 0 ? "↑" : (percentChange < 0 ? "↓" : "−"));
+                    } else {
+                        System.out.println("    Current Price: Not available");
+                        System.out.println("    Current Value: Not available");
+                        System.out.println("    Performance: Not available");
+                    }
                 }
+                
+                if (totalCost > 0) {
+                    double portfolioPerformance = ((totalValue - totalCost) / totalCost) * 100;
+                    System.out.printf("Total Portfolio Value: $%.2f\n", totalValue);
+                    System.out.printf("Total Portfolio Performance: %.2f%% %s\n", 
+                        Math.abs(portfolioPerformance),
+                        portfolioPerformance > 0 ? "↑" : (portfolioPerformance < 0 ? "↓" : "−"));
+                } else {
+                    System.out.println("Total Portfolio Value: $" + totalValue);
+                    System.out.println("Total Portfolio Performance: N/A (no investments)");
+                }
+                System.out.println();
             }
-            
-            if (totalCost > 0) {
-                double portfolioPerformance = ((totalValue - totalCost) / totalCost) * 100;
-                System.out.printf("Total Portfolio Value: $%.2f\n", totalValue);
-                System.out.printf("Total Portfolio Performance: %.2f%% %s\n", 
-                    Math.abs(portfolioPerformance),
-                    portfolioPerformance > 0 ? "↑" : (portfolioPerformance < 0 ? "↓" : "−"));
-            } else {
-                System.out.println("Total Portfolio Value: $" + totalValue);
-                System.out.println("Total Portfolio Performance: N/A (no investments)");
-            }
-            System.out.println();
         }
     }
-}
 
     private static void createPortfolio() {
         System.out.print("Enter name for the new portfolio: ");
@@ -204,57 +204,61 @@ public class Main {
     }
 
     private static void managePortfolio() {
-    System.out.print("Enter portfolio name: ");
-    String name = scanner.nextLine();
+        System.out.print("Enter portfolio name: ");
+        String name = scanner.nextLine();
 
-    Portfolio portfolio = loggedInUser.getPortfolio(name);
-    if (portfolio == null) {
-        System.out.println("Portfolio not found.");
-        return;
-    }
-
-    while (true) {
-        System.out.println("\n--- Manage Portfolio ---");
-        System.out.println("1. View Portfolio Details");
-        System.out.println("2. Buy Stock");
-        System.out.println("3. Sell Stock");
-        System.out.println("4. Deposit Cash");
-        System.out.println("5. Withdraw Cash");
-        System.out.println("6. View Stock History");
-        System.out.println("7. Predict Future Prices");
-        System.out.println("8. Return to Main Menu");
-        System.out.print("Choose an option: ");
-
-        int choice = scanner.nextInt();
-        scanner.nextLine();
-
-        switch (choice) {
-            case 1:
-                portfolio.viewDetails();
-                break;
-            case 2:
-                buyStock(portfolio);
-                break;
-            case 3:
-                sellStock(portfolio);
-                break;
-            case 4:
-                depositCash(portfolio);
-                break;
-            case 5:
-                withdrawCash(portfolio);
-                break;
-            case 6:
-                viewStockHistory(portfolio);
-                break;
-            case 7:
-                predictFuturePrices(portfolio);
-                break;
-            case 8:
-                return;
-            default:
-                System.out.println("Invalid option. Please try again.");
+        Portfolio portfolio = loggedInUser.getPortfolio(name);
+        if (portfolio == null) {
+            System.out.println("Portfolio not found.");
+            return;
         }
+
+        while (true) {
+            System.out.println("\n--- Manage Portfolio ---");
+            System.out.println("1. View Portfolio Details");
+            System.out.println("2. Buy Stock");
+            System.out.println("3. Sell Stock");
+            System.out.println("4. Deposit Cash");
+            System.out.println("5. Withdraw Cash");
+            System.out.println("6. View Stock History");
+            System.out.println("7. Predict Future Prices");
+            System.out.println("8. Return to Main Menu");
+            System.out.print("Choose an option: ");
+
+            int choice = scanner.nextInt();
+            scanner.nextLine();
+
+            switch (choice) {
+                case 1:
+                    portfolio.viewDetails();
+                    break;
+                case 2:
+                    buyStock(portfolio);
+                    break;
+                case 3:
+                    sellStock(portfolio);
+                    break;
+                case 4:
+                    depositCash(portfolio);
+                    break;
+                case 5:
+                    withdrawCash(portfolio);
+                    break;
+                case 6:
+                    viewStockHistory(portfolio);
+                    break;
+                case 7:
+                    try {
+                    portfolio.predictFuturePrices();
+                    } catch (SQLException e) {
+                        System.out.println("Error predicting future prices: " + e.getMessage());
+                    }
+                    break;
+                case 8:
+                    return;
+                default:
+                    System.out.println("Invalid option. Please try again.");
+            }
         }
     }
 
@@ -272,7 +276,6 @@ public class Main {
         scanner.nextLine();
         portfolio.withdraw(amount);
     }
-
 
     private static void buyStock(Portfolio portfolio) {
         System.out.print("Enter stock symbol: ");
@@ -410,24 +413,47 @@ public class Main {
     }
 
     private static void deleteStockList() {
-        System.out.print("Enter the ID of the stock list to delete: ");
-        int listID = scanner.nextInt();
-        scanner.nextLine();
+    System.out.print("Enter the ID of the stock list to delete: ");
+    int listID = scanner.nextInt();
+    scanner.nextLine();
 
-        // MORE
+    StockList listToDelete = loggedInUser.getStockLists().stream()
+            .filter(list -> list.getListID() == listID)
+            .findFirst()
+            .orElse(null);
+
+    if (listToDelete != null) {
+        loggedInUser.getStockLists().remove(listToDelete);
         System.out.println("Stock list with ID '" + listID + "' deleted.");
+    } else {
+        System.out.println("Stock list not found.");
     }
+}
 
     private static void shareStockList() {
-        System.out.print("Enter the ID of the stock list to share: ");
-        int listID = scanner.nextInt();
-        scanner.nextLine();
-        System.out.print("Enter username of the user to share with: ");
-        String username = scanner.nextLine();
+    System.out.print("Enter the ID of the stock list to share: ");
+    int listID = scanner.nextInt();
+    scanner.nextLine();
+    System.out.print("Enter username of the user to share with: ");
+    String username = scanner.nextLine();
 
-        // MORE
-        System.out.println("Stock list with ID '" + listID + "' shared with " + username + ".");
+    StockList listToShare = loggedInUser.getStockLists().stream()
+            .filter(list -> list.getListID() == listID)
+            .findFirst()
+            .orElse(null);
+
+    if (listToShare != null) {
+        User friendUser = User.login(username, ""); // This is just to get the User object, not to actually log in
+        if (friendUser != null) {
+            loggedInUser.shareStockList(listToShare, friendUser);
+            System.out.println("Stock list with ID '" + listID + "' shared with " + username + ".");
+        } else {
+            System.out.println("User not found.");
+        }
+    } else {
+        System.out.println("Stock list not found.");
     }
+}
 
     private static void viewStockList() {
         System.out.print("Enter the ID of the stock list to view: ");
@@ -448,10 +474,10 @@ public class Main {
 
                 switch (choice) {
                     case 1:
-                        writeReview(stockList.getListID());
+                        writeReview(listID);
                         break;
                     case 2:
-                        deleteReview(stockList.getListID());
+                        deleteReview(listID);
                         break;
                     case 3:
                         return;
@@ -507,9 +533,6 @@ public class Main {
     }
 
     private static void addNewStockData() {
-        Scanner scanner = new Scanner(System.in);
-        StockAnalyzer analyzer = new StockAnalyzer();
-
         System.out.print("Enter stock symbol: ");
         String symbol = scanner.nextLine();
 
@@ -541,17 +564,15 @@ public class Main {
             System.out.println("New stock data added successfully.");
         } catch (SQLException e) {
             System.out.println("Error adding new stock data: " + e.getMessage());
-            e.printStackTrace(); // This will print the full stack trace for debugging
-        } finally {
-            analyzer.closeConnection();
+            e.printStackTrace();
         }
     }
 
     private static void analyzeAnyStock() {
-        StockAnalyzer analyzer = new StockAnalyzer();
         try {
             System.out.println("\n--- Available Stocks ---");
-            //List<String> symbols = analyzer.getAllStockSymbols();
+            List<String> symbols = analyzer.getAllStockSymbols();
+            symbols.forEach(System.out::println);
 
             System.out.print("Enter the stock symbol to analyze: ");
             String symbol = scanner.nextLine();
@@ -603,36 +624,16 @@ public class Main {
 
         } catch (SQLException e) {
             System.out.println("Error analyzing stock: " + e.getMessage());
-        } finally {
-            analyzer.closeConnection();
         }
     }
 
-    public void viewStockHistory(String symbol) throws SQLException {
-    List<Map<String, Object>> historicalPrices = analyzer.getHistoricalPrices(symbol);
-    
-    System.out.println("Full Historical Prices for " + symbol);
-    System.out.println("Date\t\tPrice");
-    System.out.println("--------------------");
-    
-    for (Map<String, Object> dataPoint : historicalPrices) {
-        LocalDate date = (LocalDate) dataPoint.get("date");
-        double price = (double) dataPoint.get("price");
-        System.out.printf("%s\t$%.2f\n", date, price);
-    }
-    
-    displayASCIIChart_Historical(historicalPrices);
-}
-
-private static void predictFuturePrices(Portfolio portfolio) {
+    private static void viewStockHistory(Portfolio portfolio) {
     System.out.print("Enter stock symbol: ");
     String symbol = scanner.nextLine();
     try {
-        portfolio.predictFuturePrices(symbol);
+        portfolio.viewStockHistory(symbol);
     } catch (SQLException e) {
-        System.out.println("Error predicting future prices: " + e.getMessage());
+        System.out.println("Error viewing stock history: " + e.getMessage());
     }
 }
 }
-
-

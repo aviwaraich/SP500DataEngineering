@@ -8,6 +8,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Scanner;
 import java.util.stream.Collectors;
 
 public class Portfolio {
@@ -365,12 +366,36 @@ public class Portfolio {
     }
 
     public void viewStockHistory(String symbol) throws SQLException {
-    LocalDate endDate = LocalDate.now();
-    LocalDate startDate = endDate.minusYears(1);  // Get 1 year of historical data
+    System.out.print("Enter start date (YYYY-MM-DD): ");
+    LocalDate startDate = LocalDate.parse(new Scanner(System.in).nextLine());
+    System.out.print("Enter end date (YYYY-MM-DD): ");
+    LocalDate endDate = LocalDate.parse(new Scanner(System.in).nextLine());
 
-    List<Map<String, Object>> historicalPrices = analyzer.getHistoricalPrices(symbol, startDate, endDate);
+    System.out.println("\nSelect data frequency:");
+    System.out.println("1. Daily");
+    System.out.println("2. Weekly");
+    System.out.println("3. Monthly");
+    System.out.println("4. Yearly");
+    System.out.print("Enter your choice (1-4): ");
+    int frequencyChoice = new Scanner(System.in).nextInt();
+
+    String frequency;
+    switch (frequencyChoice) {
+        case 1: frequency = "daily"; break;
+        case 2: frequency = "weekly"; break;
+        case 3: frequency = "monthly"; break;
+        case 4: frequency = "yearly"; break;
+        default: frequency = "daily";
+    }
+
+    List<Map<String, Object>> historicalPrices = analyzer.getHistoricalPrices(symbol, startDate, endDate, frequency);
     
-    System.out.println("Historical Prices for " + symbol);
+    if (historicalPrices.isEmpty()) {
+        System.out.println("No data available for the specified date range and frequency.");
+        return;
+    }
+
+    System.out.println("\nHistorical Prices for " + symbol + " (" + frequency + ")");
     System.out.println("Date\t\tPrice");
     System.out.println("--------------------");
     
@@ -380,32 +405,15 @@ public class Portfolio {
         System.out.printf("%s\t$%.2f\n", date, price);
     }
     
-    displayASCIIChart_Historical(historicalPrices);
+    displayASCIIChart(historicalPrices);
 }
 
-public void predictFuturePrices(String symbol) throws SQLException {
-    LocalDate startDate = LocalDate.now();
-    int daysToPredict = 30;  // Predict for the next 30 days
-
-    List<Double> predictions = analyzer.predictFuturePrice(symbol, startDate, daysToPredict);
-    
-    System.out.println("Price Predictions for " + symbol);
-    System.out.println("Day\tPredicted Price");
-    System.out.println("--------------------");
-    
-    for (int i = 0; i < predictions.size(); i++) {
-        System.out.printf("%d\t$%.2f\n", i+1, predictions.get(i));
-    }
-    
-    displayASCIIChart_Prediction(predictions);
-}
-
-private void displayASCIIChart_Historical(List<Map<String, Object>> data) {
+private void displayASCIIChart(List<Map<String, Object>> data) {
     int chartWidth = 50;
     double min = data.stream().mapToDouble(d -> (double) d.get("price")).min().orElse(0);
     double max = data.stream().mapToDouble(d -> (double) d.get("price")).max().orElse(0);
     
-    System.out.println("\nHistorical Price Chart:");
+    System.out.println("\nPrice Chart:");
     System.out.println("Date       Price   Chart");
     System.out.println("-----------------------------");
     
@@ -415,6 +423,47 @@ private void displayASCIIChart_Historical(List<Map<String, Object>> data) {
         int barLength = (int) ((price - min) / (max - min) * chartWidth);
         System.out.printf("%s $%.2f |%s\n", date, price, "=".repeat(barLength));
     }
+}
+
+public void predictFuturePrices() throws SQLException {
+    if (holdings.isEmpty()) {
+        System.out.println("You don't have any stock holdings in this portfolio.");
+        return;
+    }
+
+    System.out.println("Select a stock to predict future prices:");
+    for (int i = 0; i < holdings.size(); i++) {
+        System.out.printf("%d. %s\n", i + 1, holdings.get(i).getSymbol());
+    }
+
+    Scanner scanner = new Scanner(System.in);
+    int choice = scanner.nextInt();
+    scanner.nextLine(); // Consume newline
+
+    if (choice < 1 || choice > holdings.size()) {
+        System.out.println("Invalid selection.");
+        return;
+    }
+
+    String symbol = holdings.get(choice - 1).getSymbol();
+    LocalDate startDate = LocalDate.now();
+    int daysToPredict = 30;  // Predict for the next 30 days
+
+    List<Double> predictions = analyzer.predictFuturePrice(symbol, startDate, daysToPredict);
+    
+    displayPredictions(symbol, predictions);
+}
+
+private void displayPredictions(String symbol, List<Double> predictions) {
+    System.out.println("\nPrice Predictions for " + symbol);
+    System.out.println("Day\tPredicted Price");
+    System.out.println("--------------------");
+    
+    for (int i = 0; i < predictions.size(); i++) {
+        System.out.printf("%d\t$%.2f\n", i+1, predictions.get(i));
+    }
+    
+    displayASCIIChart_Prediction(predictions);
 }
 
 private void displayASCIIChart_Prediction(List<Double> data) {

@@ -270,22 +270,45 @@ public class StockAnalyzer {
         return new double[]{slope, intercept};
     }
 
-    public List<Map<String, Object>> getHistoricalPrices(String symbol, LocalDate startDate, LocalDate endDate) throws SQLException {
+    public List<Map<String, Object>> getHistoricalPrices(String symbol, LocalDate startDate, LocalDate endDate, String frequency) throws SQLException {
     List<Map<String, Object>> historicalPrices = new ArrayList<>();
-    String sql = "SELECT timestamp, close FROM Stocks WHERE symbol = ? ORDER BY timestamp";
+    String sql = buildSqlQuery(frequency);
 
     try (PreparedStatement pstmt = conn.prepareStatement(sql)) {
         pstmt.setString(1, symbol);
+        pstmt.setDate(2, java.sql.Date.valueOf(startDate));
+        pstmt.setDate(3, java.sql.Date.valueOf(endDate));
 
         ResultSet rs = pstmt.executeQuery();
         while (rs.next()) {
             Map<String, Object> dataPoint = new HashMap<>();
-            dataPoint.put("date", rs.getDate("timestamp").toLocalDate());
-            dataPoint.put("price", rs.getDouble("close"));
+            dataPoint.put("date", rs.getDate("date").toLocalDate());
+            dataPoint.put("price", rs.getDouble("price"));
             historicalPrices.add(dataPoint);
         }
     }
     return historicalPrices;
+}
+
+private String buildSqlQuery(String frequency) {
+    String baseQuery = "SELECT %s AS date, AVG(close) AS price " +
+                       "FROM Stocks " +
+                       "WHERE symbol = ? AND timestamp BETWEEN ? AND ? " +
+                       "GROUP BY %s " +
+                       "ORDER BY date";
+
+    switch (frequency) {
+        case "daily":
+            return String.format(baseQuery, "timestamp", "timestamp");
+        case "weekly":
+            return String.format(baseQuery, "date_trunc('week', timestamp)", "date_trunc('week', timestamp)");
+        case "monthly":
+            return String.format(baseQuery, "date_trunc('month', timestamp)", "date_trunc('month', timestamp)");
+        case "yearly":
+            return String.format(baseQuery, "date_trunc('year', timestamp)", "date_trunc('year', timestamp)");
+        default:
+            return String.format(baseQuery, "timestamp", "timestamp");
+    }
 }
 
     public void closeConnection() {

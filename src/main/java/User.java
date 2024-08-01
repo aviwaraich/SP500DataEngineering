@@ -143,7 +143,7 @@ public class User {
 
     public static List<FriendRequest> loadFriendRequests(String username) {
         List<FriendRequest> friendRequests = new ArrayList<>();
-        String sql = "SELECT * FROM FriendRequest WHERE senderusername = ? OR receiverusername = ?";
+        String sql = "SELECT * FROM FriendRequest WHERE Sender = ? OR Receiver = ?";
 
         try (Connection conn = DatabaseManager.getConnection(); PreparedStatement pstmt = conn.prepareStatement(sql)) {
 
@@ -152,12 +152,12 @@ public class User {
 
             try (ResultSet rs = pstmt.executeQuery()) {
                 while (rs.next()) {
-                    String senderUsername = rs.getString("senderusername");
-                    String receiverUsername = rs.getString("receiverusername");
+                    String Sender = rs.getString("Sender");
+                    String Receiver = rs.getString("Receiver");
                     Date requestTime = new Date(rs.getTimestamp("requesttime").getTime());
                     String status = rs.getString("status");
 
-                    FriendRequest request = new FriendRequest(senderUsername, receiverUsername);
+                    FriendRequest request = new FriendRequest(Sender, Receiver);
                     request.setRequestTime(requestTime);
                     request.setStatus(status);
                     friendRequests.add(request);
@@ -183,8 +183,8 @@ public class User {
                     int listID = rs.getInt("listid");
                     String name = rs.getString("name");
                     boolean isPublic = rs.getBoolean("ispublic");
-                    String creatorUsername = rs.getString("creatorusername");
-                    StockList list = new StockList(listID, name, isPublic, creatorUsername);
+                    String Creator = rs.getString("Creator");
+                    StockList list = new StockList(listID, name, isPublic, Creator);
                     viewableStockLists.add(list);
                 }
             }
@@ -236,8 +236,8 @@ public class User {
     }
 
     public boolean sendFriendRequest(String receiver) {
-        String checkSql = "SELECT requesttime FROM FriendRequest WHERE senderusername = ? AND receiverusername = ? ORDER BY requesttime DESC LIMIT 1";
-        String insertSql = "INSERT INTO FriendRequest (senderusername, receiverusername, status, requesttime) VALUES (?, ?, 'Pending', ?)";
+        String checkSql = "SELECT requesttime FROM FriendRequest WHERE Sender = ? AND Receiver = ? ORDER BY requesttime DESC LIMIT 1";
+        String insertSql = "INSERT INTO FriendRequest (Sender, Receiver, status, requesttime) VALUES (?, ?, 'Pending', ?)";
 
         try (Connection conn = DatabaseManager.getConnection(); PreparedStatement checkPstmt = conn.prepareStatement(checkSql)) {
 
@@ -280,7 +280,7 @@ public class User {
     public boolean acceptFriendRequest(String username) {
         for (FriendRequest request : friendRequests) {
             if (request.getReceiver().equals(this.username) && request.getSender().equals(username)) {
-                String sqlUpdateRequest = "UPDATE FriendRequest SET status = 'Accepted' WHERE senderusername = ? AND receiverusername = ?";
+                String sqlUpdateRequest = "UPDATE FriendRequest SET status = 'Accepted' WHERE Sender = ? AND Receiver = ?";
                 String sqlInsertFriendship = "INSERT INTO Friendship (username1, username2) VALUES (?, ?), (?, ?)";
 
                 try (Connection conn = DatabaseManager.getConnection(); PreparedStatement pstmtUpdate = conn.prepareStatement(sqlUpdateRequest); PreparedStatement pstmtInsert = conn.prepareStatement(sqlInsertFriendship)) {
@@ -312,7 +312,7 @@ public class User {
     public boolean rejectFriendRequest(String username) {
         for (FriendRequest request : friendRequests) {
             if (request.getReceiver().equals(this.username) && request.getSender().equals(username)) {
-                String sqlUpdateRequest = "UPDATE FriendRequest SET status = 'Declined' WHERE senderusername = ? AND receiverusername = ?";
+                String sqlUpdateRequest = "UPDATE FriendRequest SET status = 'Declined' WHERE Sender = ? AND Receiver = ?";
 
                 try (Connection conn = DatabaseManager.getConnection(); PreparedStatement pstmt = conn.prepareStatement(sqlUpdateRequest)) {
 
@@ -333,7 +333,7 @@ public class User {
     public boolean removeFriend(String friendUsername) {
         if (friends.contains(friendUsername)) {
             String sqlDeleteFriendship = "DELETE FROM Friendship WHERE (username1 = ? AND username2 = ?) OR (username1 = ? AND username2 = ?)";
-            String sqlInsertFriendRequest = "INSERT INTO FriendRequest (senderusername, receiverusername, status, requesttime) VALUES (?, ?, 'Declined', ?)";
+            String sqlInsertFriendRequest = "INSERT INTO FriendRequest (Sender, Receiver, status, requesttime) VALUES (?, ?, 'Declined', ?)";
 
             try (Connection conn = DatabaseManager.getConnection(); PreparedStatement pstmtDelete = conn.prepareStatement(sqlDeleteFriendship); PreparedStatement pstmtInsert = conn.prepareStatement(sqlInsertFriendRequest)) {
 
@@ -403,8 +403,8 @@ public class User {
                 if (rs.next()) {
                     String name = rs.getString("name");
                     boolean isPublic = rs.getBoolean("ispublic");
-                    String creatorUsername = rs.getString("creatorusername");
-                    return new StockList(listID, name, isPublic, creatorUsername);
+                    String Creator = rs.getString("Creator");
+                    return new StockList(listID, name, isPublic, Creator);
                 }
             }
         } catch (SQLException e) {
@@ -414,7 +414,7 @@ public class User {
     }
 
     public boolean createStockList(String name, boolean isPublic) {
-        String sql = "INSERT INTO StockList (name, ispublic, creatorusername) VALUES (?, ?, ?)";
+        String sql = "INSERT INTO StockList (name, ispublic, Creator) VALUES (?, ?, ?)";
 
         try (Connection conn = DatabaseManager.getConnection(); PreparedStatement pstmt = conn.prepareStatement(sql, PreparedStatement.RETURN_GENERATED_KEYS)) {
 
@@ -451,8 +451,8 @@ public class User {
                 if (rs.next()) {
                     String name = rs.getString("name");
                     boolean isPublic = rs.getBoolean("ispublic");
-                    String creatorUsername = rs.getString("creatorusername");
-                    StockList stockList = new StockList(listID, name, isPublic, creatorUsername);
+                    String Creator = rs.getString("Creator");
+                    StockList stockList = new StockList(listID, name, isPublic, Creator);
 
                     if (isPublic || isStockListSharedWithUser(listID, this.username)) {
                         stockList.setReviews(loadStockListReviews(listID));
@@ -549,7 +549,7 @@ public class User {
     }
 
     public void viewIncomingFriendRequests() {
-        String sql = "SELECT senderusername FROM FriendRequest WHERE receiverusername = ? AND status = 'Pending'";
+        String sql = "SELECT Sender FROM FriendRequest WHERE Receiver = ? AND status = 'Pending'";
         try (Connection conn = DatabaseManager.getConnection(); PreparedStatement pstmt = conn.prepareStatement(sql)) {
             pstmt.setString(1, this.username);
             try (ResultSet rs = pstmt.executeQuery()) {
@@ -559,8 +559,8 @@ public class User {
                 }
                 System.out.println("\n--- Incoming Friend Requests ---");
                 do {
-                    String senderUsername = rs.getString("senderusername");
-                    System.out.println(senderUsername + " has sent you a friend request.");
+                    String Sender = rs.getString("Sender");
+                    System.out.println(Sender + " has sent you a friend request.");
                 } while (rs.next());
             }
         } catch (SQLException e) {
@@ -569,7 +569,7 @@ public class User {
     }
 
     public void viewOutgoingFriendRequests() {
-        String sql = "SELECT receiverusername FROM FriendRequest WHERE senderusername = ? AND status = 'Pending'";
+        String sql = "SELECT Receiver FROM FriendRequest WHERE Sender = ? AND status = 'Pending'";
         try (Connection conn = DatabaseManager.getConnection(); PreparedStatement pstmt = conn.prepareStatement(sql)) {
             pstmt.setString(1, this.username);
             try (ResultSet rs = pstmt.executeQuery()) {
@@ -579,8 +579,8 @@ public class User {
                 }
                 System.out.println("\n--- Outgoing Friend Requests ---");
                 do {
-                    String receiverUsername = rs.getString("receiverusername");
-                    System.out.println("You have sent a friend request to " + receiverUsername + ".");
+                    String Receiver = rs.getString("Receiver");
+                    System.out.println("You have sent a friend request to " + Receiver + ".");
                 } while (rs.next());
             }
         } catch (SQLException e) {
@@ -636,7 +636,7 @@ public class User {
 
     private List<StockList> loadStockLists() {
         List<StockList> stockLists = new ArrayList<>();
-        String sql = "SELECT * FROM StockList WHERE creatorusername = ? OR listid IN (SELECT listid FROM SharedStockList WHERE username = ?)";
+        String sql = "SELECT * FROM StockList WHERE Creator = ? OR listid IN (SELECT listid FROM SharedStockList WHERE username = ?)";
 
         try (Connection conn = DatabaseManager.getConnection(); PreparedStatement pstmt = conn.prepareStatement(sql)) {
 
@@ -648,8 +648,8 @@ public class User {
                     int listID = rs.getInt("listid");
                     String name = rs.getString("name");
                     boolean isPublic = rs.getBoolean("ispublic");
-                    String creatorUsername = rs.getString("creatorusername");
-                    StockList stockList = new StockList(listID, name, isPublic, creatorUsername);
+                    String Creator = rs.getString("Creator");
+                    StockList stockList = new StockList(listID, name, isPublic, Creator);
                     stockLists.add(stockList);
                 }
             }
@@ -688,7 +688,7 @@ public class User {
         // Check if the user owns the stock list
         StockList list = getStockList(listID);
         if (list != null && list.getCreator().equals(this.username)) {
-            String sql = "INSERT INTO StockListItem (listid, symbol, share) VALUES (?, ?, ?)";
+            String sql = "INSERT INTO StockListItem (ListID, Symbol, Shares) VALUES (?, ?, ?)";
 
             try (Connection conn = DatabaseManager.getConnection(); PreparedStatement pstmt = conn.prepareStatement(sql)) {
 
@@ -716,7 +716,7 @@ public class User {
         // Check if the user owns the stock list
         StockList list = getStockList(listID);
         if (list != null && list.getCreator().equals(this.username)) {
-            String sql = "DELETE FROM StockListItem WHERE listid = ? AND symbol = ?";
+            String sql = "DELETE FROM StockListItem WHERE ListID = ? AND Symbol = ?";
 
             try (Connection conn = DatabaseManager.getConnection(); PreparedStatement pstmt = conn.prepareStatement(sql)) {
 

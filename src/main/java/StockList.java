@@ -1,12 +1,14 @@
+
 import java.util.ArrayList;
 import java.util.List;
 
 public class StockList {
+
     private int listID;
     private String name;
     private boolean isPublic;
     private String creator;
-    private List<StockHolding> stocks;
+    private List<Stock> stocks;
     private List<Review> reviews;
 
     public StockList(int listID, String name, boolean isPublic, String creator) {
@@ -34,7 +36,7 @@ public class StockList {
         return creator;
     }
 
-    public List<StockHolding> getStocks() {
+    public List<Stock> getStocks() {
         return stocks;
     }
 
@@ -43,7 +45,7 @@ public class StockList {
     }
 
     // Add stock to list
-    public void addStock(StockHolding stock) {
+    public void addStock(Stock stock) {
         stocks.add(stock);
     }
 
@@ -61,7 +63,7 @@ public class StockList {
     public void viewDetails() {
         System.out.println(this);
         System.out.println("Stocks:");
-        for (StockHolding stock : stocks) {
+        for (Stock stock : stocks) {
             System.out.println("  " + stock);
         }
         System.out.println("Reviews:");

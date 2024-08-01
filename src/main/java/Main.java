@@ -1,3 +1,4 @@
+
 import java.sql.SQLException;
 import java.time.LocalDate;
 import java.util.ArrayList;
@@ -144,7 +145,7 @@ public class Main {
                 System.out.println("Portfolio Name: " + portfolio.getName());
                 System.out.printf("Cash Balance: $%.2f\n", portfolio.getCashBalance());
                 System.out.println("Holdings:");
-                
+
                 for (StockHolding holding : portfolio.getHoldings()) {
                     String symbol = holding.getSymbol();
                     int shares = holding.getShares();
@@ -152,31 +153,31 @@ public class Main {
                     double purchasePrice = holding.getAveragePurchasePrice();
                     double currentValue = shares * currentPrice;
                     double cost = shares * purchasePrice;
-                    
+
                     totalValue += currentValue;
                     totalCost += cost;
-                    
+
                     System.out.printf("  %s: %d shares\n", symbol, shares);
                     System.out.printf("    Purchase Price: $%.2f\n", purchasePrice);
                     if (currentPrice != -1) {
                         double percentChange = ((currentPrice - purchasePrice) / purchasePrice) * 100;
                         System.out.printf("    Current Price: $%.2f\n", currentPrice);
                         System.out.printf("    Current Value: $%.2f\n", currentValue);
-                        System.out.printf("    Performance: %.2f%% %s\n", Math.abs(percentChange), 
-                            percentChange > 0 ? "↑" : (percentChange < 0 ? "↓" : "−"));
+                        System.out.printf("    Performance: %.2f%% %s\n", Math.abs(percentChange),
+                                percentChange > 0 ? "↑" : (percentChange < 0 ? "↓" : "−"));
                     } else {
                         System.out.println("    Current Price: Not available");
                         System.out.println("    Current Value: Not available");
                         System.out.println("    Performance: Not available");
                     }
                 }
-                
+
                 if (totalCost > 0) {
                     double portfolioPerformance = ((totalValue - totalCost) / totalCost) * 100;
                     System.out.printf("Total Portfolio Value: $%.2f\n", totalValue);
-                    System.out.printf("Total Portfolio Performance: %.2f%% %s\n", 
-                        Math.abs(portfolioPerformance),
-                        portfolioPerformance > 0 ? "↑" : (portfolioPerformance < 0 ? "↓" : "−"));
+                    System.out.printf("Total Portfolio Performance: %.2f%% %s\n",
+                            Math.abs(portfolioPerformance),
+                            portfolioPerformance > 0 ? "↑" : (portfolioPerformance < 0 ? "↓" : "−"));
                 } else {
                     System.out.println("Total Portfolio Value: $" + totalValue);
                     System.out.println("Total Portfolio Performance: N/A (no investments)");
@@ -250,7 +251,7 @@ public class Main {
                     break;
                 case 7:
                     try {
-                    portfolio.predictFuturePrices();
+                        portfolio.predictFuturePrices();
                     } catch (SQLException e) {
                         System.out.println("Error predicting future prices: " + e.getMessage());
                     }
@@ -412,48 +413,27 @@ public class Main {
     }
 
     private static void deleteStockList() {
+        System.out.print("Enter the ID of the stock list to delete: ");
+        int listID = scanner.nextInt();
+        scanner.nextLine(); // Consume the newline character
 
-    System.out.print("Enter the ID of the stock list to delete: ");
-    int listID = scanner.nextInt();
-    scanner.nextLine();
-
-    StockList listToDelete = loggedInUser.getStockLists().stream()
-            .filter(list -> list.getListID() == listID)
-            .findFirst()
-            .orElse(null);
-
-    if (listToDelete != null) {
-        loggedInUser.getStockLists().remove(listToDelete);
-        System.out.println("Stock list with ID '" + listID + "' deleted.");
-    } else {
-        System.out.println("Stock list not found.");
+        if (loggedInUser.deleteStockList(listID)) {
+            System.out.println("Stock list with ID '" + listID + "' deleted.");
+        } else {
+            System.out.println("Failed to delete stock list. Please try again.");
+        }
     }
-}
+
 
     private static void shareStockList() {
-    System.out.print("Enter the ID of the stock list to share: ");
-    int listID = scanner.nextInt();
-    scanner.nextLine();
-    System.out.print("Enter username of the user to share with: ");
-    String username = scanner.nextLine();
-
-    StockList listToShare = loggedInUser.getStockLists().stream()
-            .filter(list -> list.getListID() == listID)
-            .findFirst()
-            .orElse(null);
-
-    if (listToShare != null) {
-        User friendUser = User.login(username, ""); // This is just to get the User object, not to actually log in
-        if (friendUser != null) {
-            loggedInUser.shareStockList(listToShare, friendUser);
-            System.out.println("Stock list with ID '" + listID + "' shared with " + username + ".");
-        } else {
-            System.out.println("User not found.");
-        }
-    } else {
-        System.out.println("Stock list not found.");
+        System.out.print("Enter the ID of the stock list to share: ");
+        int listID = scanner.nextInt();
+        scanner.nextLine();
+        System.out.print("Enter username of the user to share with: ");
+        String username = scanner.nextLine();
+        loggedInUser.shareStockList(listID, username);
+        System.out.println("Stock list with ID '" + listID + "' shared with " + username + ".");
     }
-}
 
     private static void viewStockList() {
         // List all listIDs that the current user can see
@@ -473,7 +453,7 @@ public class Main {
             scanner.nextLine();
 
             if (viewableListIDs.contains(listID)) {
-                StockList stockList = loggedInUser.viewStockList(listID, loggedInUser.getUsername());
+                StockList stockList = loggedInUser.viewStockList(listID);
                 if (stockList != null) {
                     stockList.viewDetails();
                     while (true) {
@@ -678,7 +658,7 @@ public class Main {
             System.out.println("\nPrice Predictions (next 7 days):");
             List<Double> predictions = analyzer.predictFuturePrice(symbol, endDate, 7);
             for (int i = 0; i < predictions.size(); i++) {
-                System.out.printf("Day %d: $%.2f\n", i+1, predictions.get(i));
+                System.out.printf("Day %d: $%.2f\n", i + 1, predictions.get(i));
             }
 
         } catch (SQLException e) {
@@ -687,12 +667,12 @@ public class Main {
     }
 
     private static void viewStockHistory(Portfolio portfolio) {
-    System.out.print("Enter stock symbol: ");
-    String symbol = scanner.nextLine();
-    try {
-        portfolio.viewStockHistory(symbol);
-    } catch (SQLException e) {
-        System.out.println("Error viewing stock history: " + e.getMessage());
+        System.out.print("Enter stock symbol: ");
+        String symbol = scanner.nextLine();
+        try {
+            portfolio.viewStockHistory(symbol);
+        } catch (SQLException e) {
+            System.out.println("Error viewing stock history: " + e.getMessage());
+        }
     }
-}
 }

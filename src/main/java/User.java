@@ -1,15 +1,14 @@
 
 import java.sql.Connection;
-import java.sql.DriverManager;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.ArrayList;
+import java.util.List;
 import java.util.Date;
 import java.util.List;
 
 public class User {
-
     private String username;
     private String password;
     private List<Portfolio> portfolios;
@@ -17,9 +16,6 @@ public class User {
     private List<String> friends;
     private List<StockList> stockLists;
     private List<Review> reviews;
-    private static final String DB_URL = "jdbc:postgresql://34.66.71.243/mydb";
-    private static final String DB_USER = "postgres";
-    private static final String DB_PASSWORD = "postgres";
 
     public User(String username, String password) {
         this.username = username;
@@ -33,8 +29,8 @@ public class User {
     public static boolean register(String username, String password) {
         String sql = "INSERT INTO Users (username, password) VALUES (?, ?)";
 
-        try (Connection conn = DriverManager.getConnection(DB_URL, DB_USER, DB_PASSWORD); PreparedStatement pstmt = conn.prepareStatement(sql)) {
-
+        try (Connection conn = DatabaseManager.getConnection();
+             PreparedStatement pstmt = conn.prepareStatement(sql)) {
             pstmt.setString(1, username);
             pstmt.setString(2, password);
 
@@ -49,14 +45,17 @@ public class User {
     public static User login(String username, String password) {
         String sql = "SELECT * FROM Users WHERE username = ? AND password = ?";
 
-        try (Connection conn = DriverManager.getConnection(DB_URL, DB_USER, DB_PASSWORD); PreparedStatement pstmt = conn.prepareStatement(sql)) {
+        try (Connection conn = DatabaseManager.getConnection();
+             PreparedStatement pstmt = conn.prepareStatement(sql)) {
 
             pstmt.setString(1, username);
             pstmt.setString(2, password);
 
             try (ResultSet rs = pstmt.executeQuery()) {
                 if (rs.next()) {
-                    return new User(rs.getString("username"), rs.getString("password"));
+                    User user = new User(rs.getString("username"), rs.getString("password"));
+                    user.loadUserData();
+                    return user;
                 }
             }
         } catch (SQLException e) {
@@ -64,6 +63,14 @@ public class User {
         }
         return null;
     }
+
+    private void loadUserData() {
+    this.portfolios = Portfolio.loadPortfolios(this.username);
+    this.friends = loadFriends();
+    this.friendRequests = loadFriendRequests();
+    this.stockLists = loadStockLists();
+    this.reviews = loadReviews();
+}
 
     public void addPortfolio(Portfolio portfolio) {
         portfolios.add(portfolio);
@@ -80,6 +87,11 @@ public class User {
             }
         }
         return null;
+    }
+
+
+    public String getUsername() {
+        return username;
     }
 
     public static List<Portfolio> loadPortfolios(String username) {
@@ -104,25 +116,33 @@ public class User {
         return portfolios;
     }
 
-    public static List<String> loadFriends(String username) {
-        List<String> friends = new ArrayList<>();
-        String sql = "SELECT * FROM Friendship WHERE username1 = ?";
+    public void setUsername(String username) {
+        this.username = username;
+    }
 
-        try (Connection conn = DriverManager.getConnection(DB_URL, DB_USER, DB_PASSWORD); PreparedStatement pstmt = conn.prepareStatement(sql)) {
+    public String getPassword() {
+        return password;
+    }
 
-            pstmt.setString(1, username);
+    public void setPassword(String password) {
+        this.password = password;
+    }
 
-            try (ResultSet rs = pstmt.executeQuery()) {
-                while (rs.next()) {
-                    String friendUsername = rs.getString("username2");
-                    friends.add(friendUsername);
-                }
+    private List<String> loadFriends() {
+    List<String> friends = new ArrayList<>();
+    String sql = "SELECT username2 FROM Friendship WHERE username1 = ?";
+    try (Connection conn = DatabaseManager.getConnection();
+         PreparedStatement pstmt = conn.prepareStatement(sql)) {
+        pstmt.setString(1, this.username);
+        try (ResultSet rs = pstmt.executeQuery()) {
+            while (rs.next()) {
+                friends.add(rs.getString("username2"));
             }
-
-        } catch (SQLException e) {
-            e.printStackTrace();
         }
-        return friends;
+    } catch (SQLException e) {
+        e.printStackTrace();
+    }
+    return friends;
     }
 
     public static List<FriendRequest> loadFriendRequests(String username) {
@@ -215,32 +235,16 @@ public class User {
             return affectedRows > 0;
         } catch (SQLException e) {
             e.printStackTrace();
-            return false;
         }
+        return requests;
     }
 
-    public String getUsername() {
-        return username;
-    }
-
-    public void setUsername(String username) {
-        this.username = username;
-    }
-
-    public String getPassword() {
-        return password;
-    }
-
-    public void setPassword(String password) {
-        this.password = password;
-    }
-
-    // Send friend request
     public boolean sendFriendRequest(String receiver) {
         String checkSql = "SELECT requesttime FROM FriendRequest WHERE senderusername = ? AND receiverusername = ? ORDER BY requesttime DESC LIMIT 1";
         String insertSql = "INSERT INTO FriendRequest (senderusername, receiverusername, status, requesttime) VALUES (?, ?, 'Pending', ?)";
-
-        try (Connection conn = DriverManager.getConnection(DB_URL, DB_USER, DB_PASSWORD); PreparedStatement checkPstmt = conn.prepareStatement(checkSql)) {
+      
+        try (Connection conn = DatabaseManager.getConnection();
+             PreparedStatement checkPstmt = conn.prepareStatement(checkSql)) {
 
             checkPstmt.setString(1, this.username);
             checkPstmt.setString(2, receiver);
@@ -278,14 +282,15 @@ public class User {
         return false;
     }
 
-    // View and accept friend requests
     public boolean acceptFriendRequest(String username) {
         for (FriendRequest request : friendRequests) {
             if (request.getReceiver().equals(this.username) && request.getSender().equals(username)) {
                 String sqlUpdateRequest = "UPDATE FriendRequest SET status = 'Accepted' WHERE senderusername = ? AND receiverusername = ?";
                 String sqlInsertFriendship = "INSERT INTO Friendship (username1, username2) VALUES (?, ?), (?, ?)";
 
-                try (Connection conn = DriverManager.getConnection(DB_URL, DB_USER, DB_PASSWORD); PreparedStatement pstmtUpdate = conn.prepareStatement(sqlUpdateRequest); PreparedStatement pstmtInsert = conn.prepareStatement(sqlInsertFriendship)) {
+                try (Connection conn = DatabaseManager.getConnection();
+                     PreparedStatement pstmtUpdate = conn.prepareStatement(sqlUpdateRequest);
+                     PreparedStatement pstmtInsert = conn.prepareStatement(sqlInsertFriendship)) {
 
                     // Update friend request status
                     pstmtUpdate.setString(1, request.getSender());
@@ -311,13 +316,13 @@ public class User {
         return false;
     }
 
-    // Reject Friend Request
     public boolean rejectFriendRequest(String username) {
         for (FriendRequest request : friendRequests) {
             if (request.getReceiver().equals(this.username) && request.getSender().equals(username)) {
                 String sqlUpdateRequest = "UPDATE FriendRequest SET status = 'Declined' WHERE senderusername = ? AND receiverusername = ?";
-
-                try (Connection conn = DriverManager.getConnection(DB_URL, DB_USER, DB_PASSWORD); PreparedStatement pstmt = conn.prepareStatement(sqlUpdateRequest)) {
+              
+                try (Connection conn = DatabaseManager.getConnection();
+                     PreparedStatement pstmt = conn.prepareStatement(sqlUpdateRequest)) {
 
                     pstmt.setString(1, request.getSender());
                     pstmt.setString(2, request.getReceiver());
@@ -333,13 +338,14 @@ public class User {
         return false;
     }
 
-    // Remove friend
     public boolean removeFriend(String friendUsername) {
         if (friends.contains(friendUsername)) {
             String sqlDeleteFriendship = "DELETE FROM Friendship WHERE (username1 = ? AND username2 = ?) OR (username1 = ? AND username2 = ?)";
             String sqlInsertFriendRequest = "INSERT INTO FriendRequest (senderusername, receiverusername, status, requesttime) VALUES (?, ?, 'Declined', ?)";
 
-            try (Connection conn = DriverManager.getConnection(DB_URL, DB_USER, DB_PASSWORD); PreparedStatement pstmtDelete = conn.prepareStatement(sqlDeleteFriendship); PreparedStatement pstmtInsert = conn.prepareStatement(sqlInsertFriendRequest)) {
+            try (Connection conn = DatabaseManager.getConnection();
+                 PreparedStatement pstmtDelete = conn.prepareStatement(sqlDeleteFriendship);
+                 PreparedStatement pstmtInsert = conn.prepareStatement(sqlInsertFriendRequest)) {
 
                 // Delete friendship record
                 pstmtDelete.setString(1, this.username);
@@ -365,6 +371,7 @@ public class User {
         return false;
     }
 
+
 // Share stock list with friend
     public void shareStockList(int listID, String friend) {
         // Fetch the stock list from the database based on listID
@@ -373,8 +380,8 @@ public class User {
         if (list != null) {
             if (list.getCreator().equals(this.username)) { // Check if the current user is the creator
                 String sql = "INSERT INTO SharedStockList (username, listid) VALUES (?, ?)";
-
-                try (Connection conn = DriverManager.getConnection(DB_URL, DB_USER, DB_PASSWORD); PreparedStatement pstmt = conn.prepareStatement(sql)) {
+                       try (Connection conn = DatabaseManager.getConnection();
+             PreparedStatement pstmt = conn.prepareStatement(sql)) {
 
                     pstmt.setString(1, friend);
                     pstmt.setInt(2, listID);
@@ -418,11 +425,11 @@ public class User {
         return null;
     }
 
-    // Create stock list
-    public boolean createStockList(String name, boolean isPublic) {
+    public StockList createStockList(String name, boolean isPublic) {
         String sql = "INSERT INTO StockList (name, ispublic, creatorusername) VALUES (?, ?, ?)";
 
-        try (Connection conn = DriverManager.getConnection(DB_URL, DB_USER, DB_PASSWORD); PreparedStatement pstmt = conn.prepareStatement(sql, PreparedStatement.RETURN_GENERATED_KEYS)) {
+        try (Connection conn = DatabaseManager.getConnection();
+             PreparedStatement pstmt = conn.prepareStatement(sql, PreparedStatement.RETURN_GENERATED_KEYS)) {
 
             pstmt.setString(1, name);
             pstmt.setBoolean(2, isPublic);
@@ -446,10 +453,11 @@ public class User {
         return false;
     }
 
-    public StockList viewStockList(int listID, String currentUsername) {
+    public StockList viewStockList(int listID) {
         String sql = "SELECT * FROM StockList WHERE listid = ?";
-
-        try (Connection conn = DriverManager.getConnection(DB_URL, DB_USER, DB_PASSWORD); PreparedStatement pstmt = conn.prepareStatement(sql)) {
+      
+        try (Connection conn = DatabaseManager.getConnection();
+             PreparedStatement pstmt = conn.prepareStatement(sql)) {
 
             pstmt.setInt(1, listID);
 
@@ -460,9 +468,7 @@ public class User {
                     String creatorUsername = rs.getString("creatorusername");
                     StockList stockList = new StockList(listID, name, isPublic, creatorUsername);
 
-                    // Check if the stock list is public or shared with the current user
-                    if (isPublic || isStockListSharedWithUser(listID, currentUsername)) {
-                        // Load reviews for the stock list
+                    if (isPublic || isStockListSharedWithUser(listID, this.username)) {
                         stockList.setReviews(loadStockListReviews(listID));
                         return stockList;
                     } else {
@@ -478,12 +484,12 @@ public class User {
         return null;
     }
 
-    // Method to load reviews for a stock list
-    public List<Review> loadStockListReviews(int listID) {
-        List<Review> listReviews = new ArrayList<>();
+    private List<Review> loadStockListReviews(int listID) {
+        List<Review> reviews = new ArrayList<>();
         String sql = "SELECT * FROM Review WHERE listid = ?";
 
-        try (Connection conn = DriverManager.getConnection(DB_URL, DB_USER, DB_PASSWORD); PreparedStatement pstmt = conn.prepareStatement(sql)) {
+        try (Connection conn = DatabaseManager.getConnection();
+             PreparedStatement pstmt = conn.prepareStatement(sql)) {
 
             pstmt.setInt(1, listID);
 
@@ -491,7 +497,7 @@ public class User {
                 while (rs.next()) {
                     int reviewID = rs.getInt("reviewid");
                     String content = rs.getString("content");
-                    java.util.Date timestamp = new java.util.Date(rs.getTimestamp("timestamp").getTime());
+                    Date timestamp = new Date(rs.getTimestamp("timestamp").getTime());
                     String username = rs.getString("username");
                     Review review = new Review(reviewID, content, new Date(timestamp.getTime()), username, listID);
                     listReviews.add(review);
@@ -505,7 +511,8 @@ public class User {
 
     private boolean isStockListSharedWithUser(int listID, String username) {
         String sql = "SELECT * FROM SharedStockList WHERE listid = ? AND username = ?";
-        try (Connection conn = DriverManager.getConnection(DB_URL, DB_USER, DB_PASSWORD); PreparedStatement pstmt = conn.prepareStatement(sql)) {
+        try (Connection conn = DatabaseManager.getConnection();
+             PreparedStatement pstmt = conn.prepareStatement(sql)) {
 
             pstmt.setInt(1, listID);
             pstmt.setString(2, username);
@@ -520,11 +527,11 @@ public class User {
         return false;
     }
 
-    // Write review on stock list
     public void writeReview(int listID, String content) {
         String sql = "INSERT INTO Review (content, timestamp, username, listid) VALUES (?, ?, ?, ?)";
-
-        try (Connection conn = DriverManager.getConnection(DB_URL, DB_USER, DB_PASSWORD); PreparedStatement pstmt = conn.prepareStatement(sql, PreparedStatement.RETURN_GENERATED_KEYS)) {
+      
+        try (Connection conn = DatabaseManager.getConnection();
+             PreparedStatement pstmt = conn.prepareStatement(sql, PreparedStatement.RETURN_GENERATED_KEYS)) {
 
             pstmt.setString(1, content);
             pstmt.setTimestamp(2, new java.sql.Timestamp(new java.util.Date().getTime()));
@@ -546,8 +553,7 @@ public class User {
             e.printStackTrace();
         }
     }
-
-    // View friends
+  
     public void viewFriends() {
         if (friends.isEmpty()) {
             System.out.println("You have no friends yet.");
@@ -559,10 +565,10 @@ public class User {
         }
     }
 
-    // View incoming friend requests
     public void viewIncomingFriendRequests() {
         String sql = "SELECT senderusername FROM FriendRequest WHERE receiverusername = ? AND status = 'Pending'";
-        try (Connection conn = DriverManager.getConnection(DB_URL, DB_USER, DB_PASSWORD); PreparedStatement pstmt = conn.prepareStatement(sql)) {
+        try (Connection conn = DatabaseManager.getConnection();
+             PreparedStatement pstmt = conn.prepareStatement(sql)) {
             pstmt.setString(1, this.username);
             try (ResultSet rs = pstmt.executeQuery()) {
                 if (!rs.next()) {
@@ -580,10 +586,10 @@ public class User {
         }
     }
 
-    // View outgoing friend requests
     public void viewOutgoingFriendRequests() {
         String sql = "SELECT receiverusername FROM FriendRequest WHERE senderusername = ? AND status = 'Pending'";
-        try (Connection conn = DriverManager.getConnection(DB_URL, DB_USER, DB_PASSWORD); PreparedStatement pstmt = conn.prepareStatement(sql)) {
+        try (Connection conn = DatabaseManager.getConnection();
+             PreparedStatement pstmt = conn.prepareStatement(sql)) {
             pstmt.setString(1, this.username);
             try (ResultSet rs = pstmt.executeQuery()) {
                 if (!rs.next()) {
@@ -601,11 +607,11 @@ public class User {
         }
     }
 
-    // Delete review for a specific stock list
     public void deleteReview(int listID) {
         String sql = "DELETE FROM Review WHERE listid = ? AND username = ?";
 
-        try (Connection conn = DriverManager.getConnection(DB_URL, DB_USER, DB_PASSWORD); PreparedStatement pstmt = conn.prepareStatement(sql)) {
+        try (Connection conn = DatabaseManager.getConnection();
+             PreparedStatement pstmt = conn.prepareStatement(sql)) {
 
             pstmt.setInt(1, listID);
             pstmt.setString(2, this.username);
@@ -613,7 +619,7 @@ public class User {
             int affectedRows = pstmt.executeUpdate();
             if (affectedRows > 0) {
                 System.out.println("Your review deleted from stock list '" + listID + "'.");
-                this.reviews = loadReviews(this.username);
+                reviews.removeIf(review -> review.getListID() == listID && review.getUser().equals(this.username));
             } else {
                 System.out.println("You have not written a review for this stock list.");
             }
@@ -621,6 +627,58 @@ public class User {
             e.printStackTrace();
         }
     }
+
+    private List<StockList> loadStockLists() {
+        List<StockList> stockLists = new ArrayList<>();
+        String sql = "SELECT * FROM StockList WHERE creatorusername = ? OR listid IN (SELECT listid FROM SharedStockList WHERE username = ?)";
+
+        try (Connection conn = DatabaseManager.getConnection();
+             PreparedStatement pstmt = conn.prepareStatement(sql)) {
+
+            pstmt.setString(1, this.username);
+            pstmt.setString(2, this.username);
+
+            try (ResultSet rs = pstmt.executeQuery()) {
+                while (rs.next()) {
+                    int listID = rs.getInt("listid");
+                    String name = rs.getString("name");
+                    boolean isPublic = rs.getBoolean("ispublic");
+                    String creatorUsername = rs.getString("creatorusername");
+                    StockList stockList = new StockList(listID, name, isPublic, creatorUsername);
+                    stockLists.add(stockList);
+                }
+            }
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+        return stockLists;
+    }
+
+    private List<Review> loadReviews() {
+        List<Review> reviews = new ArrayList<>();
+        String sql = "SELECT * FROM Review WHERE username = ?";
+
+        try (Connection conn = DatabaseManager.getConnection();
+             PreparedStatement pstmt = conn.prepareStatement(sql)) {
+
+            pstmt.setString(1, this.username);
+
+            try (ResultSet rs = pstmt.executeQuery()) {
+                while (rs.next()) {
+                    int reviewID = rs.getInt("reviewid");
+                    String content = rs.getString("content");
+                    Date timestamp = new Date(rs.getTimestamp("timestamp").getTime());
+                    int listID = rs.getInt("listid");
+                    Review review = new Review(reviewID, content, timestamp, this.username, listID);
+                    reviews.add(review);
+                }
+            }
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+        return reviews;
+    }
+}
 
     // Add stock to a stock list
     public boolean addStockToList(int listID, String symbol, int share) {

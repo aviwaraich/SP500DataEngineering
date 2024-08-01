@@ -19,8 +19,8 @@ public class Review {
         return reviewID;
     }
 
-    public int getStockListID() {
-        return listID;
+    public int getListID() {
+    return listID;
     }
 
     public String getContent() {

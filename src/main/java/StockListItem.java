@@ -1,8 +1,8 @@
-public class Stock {
+public class StockListItem {
     private String symbol;
     private int shares;
 
-    public Stock(String symbol, int shares) {
+    public StockListItem(String symbol, int shares) {
         this.symbol = symbol;
         this.shares = shares;
     }
@@ -15,4 +15,3 @@ public class Stock {
         return symbol + " (" + shares + " shares)";
     }
 }
-

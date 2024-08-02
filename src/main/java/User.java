@@ -462,6 +462,7 @@ public class User {
                 // Check if the user has permission to view this stock list
                 if (isPublic || creator.equals(this.username) || isStockListSharedWithUser(listID, this.username)) {
                     stockList.setReviews(loadStockListReviews(listID));
+                    stockList.setStocks(loadStockListStocks(listID)); // Add this line
                     return stockList;
                 } else {
                     System.out.println("You do not have permission to view this stock list.");
@@ -474,6 +475,29 @@ public class User {
         e.printStackTrace();
     }
     return null;
+}
+
+// Add this method to User class
+private List<Stock> loadStockListStocks(int listID) {
+    List<Stock> stocks = new ArrayList<>();
+    String sql = "SELECT Symbol, Shares FROM StockListItem WHERE ListID = ?";
+
+    try (Connection conn = DatabaseManager.getConnection();
+         PreparedStatement pstmt = conn.prepareStatement(sql)) {
+
+        pstmt.setInt(1, listID);
+
+        try (ResultSet rs = pstmt.executeQuery()) {
+            while (rs.next()) {
+                String symbol = rs.getString("Symbol");
+                int shares = rs.getInt("Shares");
+                stocks.add(new Stock(symbol, shares));
+            }
+        }
+    } catch (SQLException e) {
+        e.printStackTrace();
+    }
+    return stocks;
 }
 
     private List<Review> loadStockListReviews(int listID) {
@@ -706,7 +730,7 @@ public class User {
                 int affectedRows = pstmt.executeUpdate();
                 if (affectedRows > 0) {
                     // Update the stock list in the User object
-                    list.addStock(new Stock(symbol));
+                    list.addStock(new Stock(symbol,share));
                     return true;
                 }
             } catch (SQLException e) {

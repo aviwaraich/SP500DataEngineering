@@ -61,14 +61,27 @@ public class StockList {
 
     // Method to view details of the stock list
     public void viewDetails() {
-        System.out.println(this);
-        System.out.println("Stocks:");
+    System.out.println(this);
+    System.out.println("Stocks:");
+    if (stocks.isEmpty()) {
+        System.out.println("  No stocks in this list.");
+    } else {
         for (Stock stock : stocks) {
             System.out.println("  " + stock);
         }
-        System.out.println("Reviews:");
+    }
+    System.out.println("Reviews:");
+    if (reviews.isEmpty()) {
+        System.out.println("  No reviews for this list.");
+    } else {
         for (Review review : reviews) {
             System.out.println("  " + review.getContent() + " - " + review.getUser() + " (" + review.getTimestamp() + ")");
         }
     }
+}
+
+// Add this method to StockList class
+public void setStocks(List<Stock> stocks) {
+    this.stocks = stocks;
+}
 }

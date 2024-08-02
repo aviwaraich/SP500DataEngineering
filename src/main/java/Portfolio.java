@@ -278,12 +278,17 @@ public class Portfolio {
     }
 
     public void viewDetails() {
-        System.out.println(this);
-        System.out.println("Holdings:");
+    System.out.println(this);
+    System.out.println("Holdings:");
+    if (holdings.isEmpty()) {
+        System.out.println("  No stocks in this portfolio.");
+    } else {
         for (StockHolding holding : holdings) {
             System.out.println("  " + holding);
         }
     }
+    System.out.println("Cash Balance: $" + String.format("%.2f", cashBalance));
+}
 
     public static boolean save(Portfolio portfolio) {
         String sql = "INSERT INTO Portfolio (name, username, cashbalance) VALUES (?, ?, ?)";

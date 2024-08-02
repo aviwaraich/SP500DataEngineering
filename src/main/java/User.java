@@ -66,7 +66,7 @@ public class User {
         this.portfolios = Portfolio.loadPortfolios(this.username);
         this.friends = loadFriends(this.username);
         this.friendRequests = loadFriendRequests(this.username);
-        this.stockLists = loadStockLists();
+        this.stockLists = loadStockLists(username);
         this.reviews = loadReviews();
     }
 
@@ -89,6 +89,10 @@ public class User {
 
     public String getUsername() {
         return username;
+    }
+
+    public List<StockList> getViewableStockLists() {
+        return loadStockLists(this.username);
     }
 
     public static List<Portfolio> loadPortfolios(String username) {
@@ -170,29 +174,29 @@ public class User {
         return friendRequests;
     }
 
-    public static List<StockList> loadStockLists(String username) {
-        List<StockList> viewableStockLists = new ArrayList<>();
-        String sql = "SELECT * FROM StockList WHERE ispublic = TRUE OR listid IN (SELECT listid FROM SharedStockList WHERE username = ?)";
+    public static StockList loadStockList(String username, int listID) {
+    String sql = "SELECT * FROM StockList WHERE (ispublic = TRUE OR listid IN (SELECT listid FROM SharedStockList WHERE username = ?)) AND listid = ?";
 
-        try (Connection conn = DatabaseManager.getConnection(); PreparedStatement pstmt = conn.prepareStatement(sql)) {
+    try (Connection conn = DatabaseManager.getConnection();
+         PreparedStatement pstmt = conn.prepareStatement(sql)) {
 
-            pstmt.setString(1, username);
+        pstmt.setString(1, username);
+        pstmt.setInt(2, listID);
 
-            try (ResultSet rs = pstmt.executeQuery()) {
-                while (rs.next()) {
-                    int listID = rs.getInt("listid");
-                    String name = rs.getString("name");
-                    boolean isPublic = rs.getBoolean("ispublic");
-                    String Creator = rs.getString("Creator");
-                    StockList list = new StockList(listID, name, isPublic, Creator);
-                    viewableStockLists.add(list);
-                }
+        try (ResultSet rs = pstmt.executeQuery()) {
+            if (rs.next()) {
+                int id = rs.getInt("listid");
+                String name = rs.getString("name");
+                boolean isPublic = rs.getBoolean("ispublic");
+                String creator = rs.getString("Creator");
+                return new StockList(id, name, isPublic, creator);
             }
-        } catch (SQLException e) {
-            e.printStackTrace();
         }
-        return viewableStockLists;
+    } catch (SQLException e) {
+        e.printStackTrace();
     }
+    return null;
+}
 
     public static List<Review> loadReviews(String username) {
         List<Review> userReviews = new ArrayList<>();
@@ -441,34 +445,36 @@ public class User {
     }
 
     public StockList viewStockList(int listID) {
-        String sql = "SELECT * FROM StockList WHERE listid = ?";
+    String sql = "SELECT * FROM StockList WHERE listid = ?";
 
-        try (Connection conn = DatabaseManager.getConnection(); PreparedStatement pstmt = conn.prepareStatement(sql)) {
+    try (Connection conn = DatabaseManager.getConnection(); 
+         PreparedStatement pstmt = conn.prepareStatement(sql)) {
 
-            pstmt.setInt(1, listID);
+        pstmt.setInt(1, listID);
 
-            try (ResultSet rs = pstmt.executeQuery()) {
-                if (rs.next()) {
-                    String name = rs.getString("name");
-                    boolean isPublic = rs.getBoolean("ispublic");
-                    String Creator = rs.getString("Creator");
-                    StockList stockList = new StockList(listID, name, isPublic, Creator);
+        try (ResultSet rs = pstmt.executeQuery()) {
+            if (rs.next()) {
+                String name = rs.getString("name");
+                boolean isPublic = rs.getBoolean("ispublic");
+                String creator = rs.getString("Creator");
+                StockList stockList = new StockList(listID, name, isPublic, creator);
 
-                    if (isPublic || isStockListSharedWithUser(listID, this.username)) {
-                        stockList.setReviews(loadStockListReviews(listID));
-                        return stockList;
-                    } else {
-                        System.out.println("You do not have permission to view this stock list.");
-                        return null;
-                    }
+                // Check if the user has permission to view this stock list
+                if (isPublic || creator.equals(this.username) || isStockListSharedWithUser(listID, this.username)) {
+                    stockList.setReviews(loadStockListReviews(listID));
+                    return stockList;
+                } else {
+                    System.out.println("You do not have permission to view this stock list.");
+                    return null;
                 }
             }
-
-        } catch (SQLException e) {
-            e.printStackTrace();
         }
-        return null;
+
+    } catch (SQLException e) {
+        e.printStackTrace();
     }
+    return null;
+}
 
     private List<Review> loadStockListReviews(int listID) {
         List<Review> listReviews = new ArrayList<>();
@@ -634,30 +640,31 @@ public class User {
         return false;
     }
 
-    private List<StockList> loadStockLists() {
-        List<StockList> stockLists = new ArrayList<>();
-        String sql = "SELECT * FROM StockList WHERE Creator = ? OR listid IN (SELECT listid FROM SharedStockList WHERE username = ?)";
+    private static List<StockList> loadStockLists(String username) {
+    List<StockList> stockLists = new ArrayList<>();
+    String sql = "SELECT * FROM StockList WHERE Creator = ? OR listid IN (SELECT listid FROM SharedStockList WHERE username = ?) OR ispublic = TRUE";
 
-        try (Connection conn = DatabaseManager.getConnection(); PreparedStatement pstmt = conn.prepareStatement(sql)) {
+    try (Connection conn = DatabaseManager.getConnection();
+         PreparedStatement pstmt = conn.prepareStatement(sql)) {
 
-            pstmt.setString(1, this.username);
-            pstmt.setString(2, this.username);
+        pstmt.setString(1, username);
+        pstmt.setString(2, username);
 
-            try (ResultSet rs = pstmt.executeQuery()) {
-                while (rs.next()) {
-                    int listID = rs.getInt("listid");
-                    String name = rs.getString("name");
-                    boolean isPublic = rs.getBoolean("ispublic");
-                    String Creator = rs.getString("Creator");
-                    StockList stockList = new StockList(listID, name, isPublic, Creator);
-                    stockLists.add(stockList);
-                }
+        try (ResultSet rs = pstmt.executeQuery()) {
+            while (rs.next()) {
+                int listID = rs.getInt("listid");
+                String name = rs.getString("name");
+                boolean isPublic = rs.getBoolean("ispublic");
+                String creator = rs.getString("Creator");
+                StockList stockList = new StockList(listID, name, isPublic, creator);
+                stockLists.add(stockList);
             }
-        } catch (SQLException e) {
-            e.printStackTrace();
         }
-        return stockLists;
+    } catch (SQLException e) {
+        e.printStackTrace();
     }
+    return stockLists;
+}
 
     private List<Review> loadReviews() {
         List<Review> reviews = new ArrayList<>();

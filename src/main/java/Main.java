@@ -1,4 +1,7 @@
 
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.time.LocalDate;
 import java.util.ArrayList;
@@ -84,7 +87,7 @@ public class Main {
                     String portfolioName = scanner.nextLine();
                     Portfolio portfolioToAnalyze = loggedInUser.getPortfolio(portfolioName);
                     if (portfolioToAnalyze != null) {
-                        analyzePortfolio(portfolioToAnalyze);
+                        analyzePortfolio(portfolioName, loggedInUser.getUsername());
                     } else {
                         System.out.println("Portfolio not found.");
                     }
@@ -300,6 +303,7 @@ public class Main {
     }
 
     private static void showSocialMenu() {
+    while (true) {
         System.out.println("\n--- Social Features ---");
         System.out.println("1. View Friends");
         System.out.println("2. View Incoming Friend Requests");
@@ -316,7 +320,7 @@ public class Main {
         System.out.print("Choose an option: ");
 
         int choice = scanner.nextInt();
-        scanner.nextLine();
+        scanner.nextLine(); // Consume the newline character
 
         switch (choice) {
             case 1:
@@ -353,11 +357,12 @@ public class Main {
                 viewStockList();
                 break;
             case 12:
-                return;
+                return; // This will exit the method and return to the main menu
             default:
                 System.out.println("Invalid option. Please try again.");
         }
     }
+}
 
     private static void sendFriendRequest() {
         System.out.print("Enter username of the user to send a friend request to: ");
@@ -426,73 +431,133 @@ public class Main {
 
 
     private static void shareStockList() {
-        System.out.print("Enter the ID of the stock list to share: ");
-        int listID = scanner.nextInt();
-        scanner.nextLine();
-        System.out.print("Enter username of the user to share with: ");
-        String username = scanner.nextLine();
-        loggedInUser.shareStockList(listID, username);
-        System.out.println("Stock list with ID '" + listID + "' shared with " + username + ".");
+    List<StockList> shareableStockLists = getShareableStockLists(loggedInUser.getUsername());
+    
+    if (shareableStockLists.isEmpty()) {
+        System.out.println("You don't have any private stock lists to share.");
+        return;
     }
+
+    System.out.println("\n--- Your Private Stock Lists ---");
+    for (StockList list : shareableStockLists) {
+        System.out.printf("ID: %d, Name: %s\n", list.getListID(), list.getName());
+    }
+
+    System.out.print("Enter the ID of the stock list to share: ");
+    int listID = scanner.nextInt();
+    scanner.nextLine(); // Consume newline
+
+    StockList selectedList = shareableStockLists.stream()
+                             .filter(list -> list.getListID() == listID)
+                             .findFirst()
+                             .orElse(null);
+
+    if (selectedList == null) {
+        System.out.println("Invalid stock list ID. Please try again.");
+        return;
+    }
+
+    System.out.print("Enter username of the user to share with: ");
+    String username = scanner.nextLine();
+    
+    loggedInUser.shareStockList(listID, username);
+    System.out.println("Stock list '" + selectedList.getName() + "' shared with " + username + ".");
+}
+
+private static List<StockList> getShareableStockLists(String username) {
+    List<StockList> shareableStockLists = new ArrayList<>();
+    String sql = "SELECT * FROM StockList WHERE Creator = ? AND ispublic = FALSE";
+
+    try (Connection conn = DatabaseManager.getConnection();
+         PreparedStatement pstmt = conn.prepareStatement(sql)) {
+
+        pstmt.setString(1, username);
+
+        try (ResultSet rs = pstmt.executeQuery()) {
+            while (rs.next()) {
+                int listID = rs.getInt("listid");
+                String name = rs.getString("name");
+                boolean isPublic = rs.getBoolean("ispublic");
+                String creator = rs.getString("Creator");
+                StockList stockList = new StockList(listID, name, isPublic, creator);
+                shareableStockLists.add(stockList);
+            }
+        }
+    } catch (SQLException e) {
+        e.printStackTrace();
+    }
+    return shareableStockLists;
+}
 
     private static void viewStockList() {
-        // List all listIDs that the current user can see
-        List<Integer> viewableListIDs = new ArrayList<>();
-        for (StockList list : User.loadStockLists(loggedInUser.getUsername())) {
-            viewableListIDs.add(list.getListID());
+    List<StockList> viewableStockLists = loggedInUser.getViewableStockLists();
+
+    while (true) {
+        System.out.println("\n--- Available Stock Lists ---");
+        for (StockList list : viewableStockLists) {
+            System.out.printf("ID: %d, Name: %s, Creator: %s, Public: %s\n",
+                list.getListID(),
+                list.getName(),
+                list.getCreator(),
+                list.isPublic() ? "Yes" : "No");
+        }
+        System.out.print("Enter the ID of the stock list to view (or 0 to return): ");
+        int listID = scanner.nextInt();
+        scanner.nextLine(); // Consume newline
+
+        if (listID == 0) {
+            return;
         }
 
-        // Prompt the user to enter a valid listID
-        while (true) {
-            System.out.println("\n--- Available Stock Lists ---");
-            for (int listID : viewableListIDs) {
-                System.out.println("  " + listID);
-            }
-            System.out.print("Enter the ID of the stock list to view: ");
-            int listID = scanner.nextInt();
-            scanner.nextLine();
+        StockList selectedList = viewableStockLists.stream()
+                                 .filter(list -> list.getListID() == listID)
+                                 .findFirst()
+                                 .orElse(null);
 
-            if (viewableListIDs.contains(listID)) {
-                StockList stockList = loggedInUser.viewStockList(listID);
-                if (stockList != null) {
-                    stockList.viewDetails();
-                    while (true) {
-                        System.out.println("\n--- Stock List Options ---");
-                        System.out.println("1. Write Review");
-                        System.out.println("2. Delete Review");
-                        System.out.println("3. Add Stock");
-                        System.out.println("4. Delete Stock");
-                        System.out.println("5. Return to Social Menu");
-                        System.out.print("Choose an option: ");
+        if (selectedList != null) {
+            StockList detailedList = loggedInUser.viewStockList(selectedList.getListID());
+            if (detailedList != null) {
+                detailedList.viewDetails();
+                while (true) {
+                    System.out.println("\n--- Stock List Options ---");
+                    System.out.println("1. Write Review");
+                    System.out.println("2. Delete Review");
+                    System.out.println("3. Add Stock");
+                    System.out.println("4. Delete Stock");
+                    System.out.println("5. Return to Stock List Selection");
+                    System.out.print("Choose an option: ");
 
-                        int choice = scanner.nextInt();
-                        scanner.nextLine();
+                    int choice = scanner.nextInt();
+                    scanner.nextLine();
 
-                        switch (choice) {
-                            case 1:
-                                writeReview(listID);
-                                break;
-                            case 2:
-                                deleteReview(listID);
-                                break;
-                            case 3:
-                                addStockToList(listID);
-                                break;
-                            case 4:
-                                deleteStockFromList(listID);
-                                break;
-                            case 5:
-                                return;
-                            default:
-                                System.out.println("Invalid option. Please try again.");
-                        }
+                    switch (choice) {
+                        case 1:
+                            writeReview(listID);
+                            break;
+                        case 2:
+                            deleteReview(listID);
+                            break;
+                        case 3:
+                            addStockToList(listID);
+                            break;
+                        case 4:
+                            deleteStockFromList(listID);
+                            break;
+                        case 5:
+                            break;
+                        default:
+                            System.out.println("Invalid option. Please try again.");
                     }
+                    if (choice == 5) break;
                 }
             } else {
-                System.out.println("Invalid stock list ID. Please enter a valid ID.");
+                System.out.println("Error: Unable to load details for the selected stock list.");
             }
+        } else {
+            System.out.println("Invalid stock list ID. Please enter a valid ID.");
         }
     }
+}
 
     private static void writeReview(int listID) {
         System.out.print("Enter your review: ");
@@ -538,38 +603,175 @@ public class Main {
         }
     }
 
-    private static void analyzePortfolio(Portfolio portfolio) {
-        try {
-            LocalDate endDate = LocalDate.now();
-            LocalDate startDate = endDate.minusYears(1);
+    public static void analyzePortfolio(String portfolioName, String username) {
+    try {
+        System.out.println("\n--- Portfolio Analysis ---");
 
-            System.out.println("\n--- Portfolio Analysis ---");
-            System.out.println("Betas:");
-            Map<String, Double> betas = portfolio.calculateBetas(startDate, endDate);
-            betas.forEach((symbol, beta) -> System.out.println(symbol + ": " + beta));
+        // Fetch all stock holdings for this portfolio
+        String holdingsQuery = "SELECT Symbol, Shares FROM StockHolding WHERE PortfolioName = ? AND Username = ?";
+        try (Connection conn = DatabaseManager.getConnection();
+             PreparedStatement pstmt = conn.prepareStatement(holdingsQuery)) {
+            pstmt.setString(1, portfolioName);
+            pstmt.setString(2, username);
+            ResultSet rs = pstmt.executeQuery();
 
-            System.out.println("\nCoefficients of Variation:");
-            Map<String, Double> covs = portfolio.calculateCoVs(startDate, endDate);
-            covs.forEach((symbol, cov) -> System.out.println(symbol + ": " + cov));
+            List<String> symbols = new ArrayList<>();
+            LocalDate startDate = null;
+            LocalDate endDate = null;
 
-            System.out.println("\nCorrelation Matrix:");
-            Map<String, Map<String, Double>> correlationMatrix = portfolio.calculateCorrelationMatrix(startDate, endDate);
-            correlationMatrix.forEach((symbol1, correlations) -> {
-                correlations.forEach((symbol2, correlation) -> {
-                    System.out.println(symbol1 + " - " + symbol2 + ": " + correlation);
-                });
-            });
+            while (rs.next()) {
+                String symbol = rs.getString("Symbol");
+                int shares = rs.getInt("Shares");
+                symbols.add(symbol);
 
-            System.out.println("\nPrice Predictions (next 7 days):");
-            Map<String, List<Double>> predictions = portfolio.predictFuturePrices(endDate, 7);
-            predictions.forEach((symbol, prices) -> {
-                System.out.println(symbol + ": " + prices);
-            });
+                System.out.println("\nAnalysis for " + symbol + ":");
 
-        } catch (SQLException e) {
-            System.out.println("Error analyzing portfolio: " + e.getMessage());
+                // Get the date range for this stock
+                LocalDate symbolStartDate = getEarliestStockDate(symbol);
+                LocalDate symbolEndDate = getLatestStockDate(symbol);
+                System.out.println("Analysis period: " + symbolStartDate + " to " + symbolEndDate);
+
+                // Update overall start and end dates
+                if (startDate == null || symbolStartDate.isBefore(startDate)) {
+                    startDate = symbolStartDate;
+                }
+                if (endDate == null || symbolEndDate.isAfter(endDate)) {
+                    endDate = symbolEndDate;
+                }
+
+                double lastClosingPrice = getLatestClosePrice(symbol);
+                System.out.println("Last Closing Price: $" + String.format("%.2f", lastClosingPrice));
+
+                double currentValue = shares * lastClosingPrice;
+                System.out.printf("Current Holding Value: $%.2f\n", currentValue);
+            }
+
+            if (!symbols.isEmpty()) {
+                // Calculate betas
+                Map<String, Double> betas = analyzer.calculateBetass(symbols, startDate, endDate);
+                for (String symbol : symbols) {
+                    System.out.println("Beta for " + symbol + ": " + String.format("%.4f", betas.get(symbol)));
+                }
+
+                // Calculate CoVs
+                Map<String, Double> covs = analyzer.calculateCoVss(symbols, startDate, endDate);
+                for (String symbol : symbols) {
+                    System.out.println("Coefficient of Variation for " + symbol + ": " + String.format("%.4f", covs.get(symbol)));
+                }
+
+                // Calculate correlation matrix
+                System.out.println("\nCorrelation Matrix:");
+                Map<String, Map<String, Double>> correlationMatrix = analyzer.calculateCorrelationMatrix(symbols, startDate, endDate);
+                for (String symbol1 : correlationMatrix.keySet()) {
+                    for (String symbol2 : correlationMatrix.get(symbol1).keySet()) {
+                        System.out.printf("%s - %s: %.4f\n", symbol1, symbol2, correlationMatrix.get(symbol1).get(symbol2));
+                    }
+                }
+
+                // Calculate total portfolio value
+                double totalPortfolioValue = getCashBalance(portfolioName, username);
+                for (String symbol : symbols) {
+                    try {
+                        double latestPrice = getLatestClosePrice(symbol);
+                        int shares = getShares(portfolioName, username, symbol);
+                        totalPortfolioValue += latestPrice * shares;
+                    } catch (SQLException e) {
+                        System.out.println("Error calculating value for " + symbol + ": " + e.getMessage());
+                    }
+                }
+                System.out.printf("\nTotal Portfolio Value: $%.2f\n", totalPortfolioValue);
+            } else {
+                System.out.println("This portfolio has no stock holdings.");
+            }
+        }
+    } catch (SQLException e) {
+        System.out.println("Error analyzing portfolio: " + e.getMessage());
+    }
+}
+// Helper methods
+
+private static double getLatestClosePrice(String symbol) throws SQLException {
+    String sql = "SELECT close FROM Stocks WHERE symbol = ? ORDER BY timestamp DESC LIMIT 1";
+    try (Connection conn = DatabaseManager.getConnection();
+         PreparedStatement pstmt = conn.prepareStatement(sql)) {
+        pstmt.setString(1, symbol);
+        ResultSet rs = pstmt.executeQuery();
+        if (rs.next()) {
+            return rs.getDouble("close");
         }
     }
+    return 0.0; // Fallback to 0 if no data found
+}
+
+private List<String> getPortfolioSymbols(String portfolioName, String username) throws SQLException {
+    List<String> symbols = new ArrayList<>();
+    String sql = "SELECT Symbol FROM StockHolding WHERE PortfolioName = ? AND Username = ?";
+    try (Connection conn = DatabaseManager.getConnection();
+         PreparedStatement pstmt = conn.prepareStatement(sql)) {
+        pstmt.setString(1, portfolioName);
+        pstmt.setString(2, username);
+        ResultSet rs = pstmt.executeQuery();
+        while (rs.next()) {
+            symbols.add(rs.getString("Symbol"));
+        }
+    }
+    return symbols;
+}
+
+private static LocalDate getEarliestStockDate(String symbol) throws SQLException {
+    String sql = "SELECT MIN(timestamp) as earliest_date FROM Stocks WHERE symbol = ?";
+    try (Connection conn = DatabaseManager.getConnection();
+         PreparedStatement pstmt = conn.prepareStatement(sql)) {
+        pstmt.setString(1, symbol);
+        ResultSet rs = pstmt.executeQuery();
+        if (rs.next()) {
+            return rs.getDate("earliest_date").toLocalDate();
+        }
+    }
+    return LocalDate.now(); // Fallback to current date if no data found
+}
+
+private static LocalDate getLatestStockDate(String symbol) throws SQLException {
+    String sql = "SELECT MAX(timestamp) as latest_date FROM Stocks WHERE symbol = ?";
+    try (Connection conn = DatabaseManager.getConnection();
+         PreparedStatement pstmt = conn.prepareStatement(sql)) {
+        pstmt.setString(1, symbol);
+        ResultSet rs = pstmt.executeQuery();
+        if (rs.next()) {
+            return rs.getDate("latest_date").toLocalDate();
+        }
+    }
+    return LocalDate.now(); // Fallback to current date if no data found
+}
+
+private static int getShares(String portfolioName, String username, String symbol) throws SQLException {
+    String sql = "SELECT Shares FROM StockHolding WHERE PortfolioName = ? AND Username = ? AND Symbol = ?";
+    try (Connection conn = DatabaseManager.getConnection();
+         PreparedStatement pstmt = conn.prepareStatement(sql)) {
+        pstmt.setString(1, portfolioName);
+        pstmt.setString(2, username);
+        pstmt.setString(3, symbol);
+        ResultSet rs = pstmt.executeQuery();
+        if (rs.next()) {
+            return rs.getInt("Shares");
+        }
+    }
+    return 0; // Fallback to 0 if no data found
+}
+
+private static double getCashBalance(String portfolioName, String username) throws SQLException {
+    String sql = "SELECT CashBalance FROM Portfolio WHERE Name = ? AND Username = ?";
+    try (Connection conn = DatabaseManager.getConnection();
+         PreparedStatement pstmt = conn.prepareStatement(sql)) {
+        pstmt.setString(1, portfolioName);
+        pstmt.setString(2, username);
+        ResultSet rs = pstmt.executeQuery();
+        if (rs.next()) {
+            return rs.getDouble("CashBalance");
+        }
+    }
+    return 0.0; // Fallback to 0 if no data found
+}
 
     private static void addNewStockData() {
         System.out.print("Enter stock symbol: ");

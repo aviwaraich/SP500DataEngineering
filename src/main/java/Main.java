@@ -260,7 +260,7 @@ public class Main {
         System.out.print("Enter amount to deposit: $");
         double amount = scanner.nextDouble();
         scanner.nextLine();
-        portfolio.setCashBalance(portfolio.getCashBalance() + amount);
+        portfolio.setCashBalance(amount);
         System.out.println("Deposited $" + amount);
     }
 

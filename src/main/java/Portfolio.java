@@ -39,8 +39,28 @@ public class Portfolio {
         return cashBalance;
     }
 
-    public void setCashBalance(double cashBalance) {
-        this.cashBalance = cashBalance;
+    public void setCashBalance(double amount) {
+        if (amount <= 0) {
+        System.out.println("Deposit amount must be positive.");
+        return;
+    }
+    
+    String sql = "UPDATE Portfolio SET CashBalance = CashBalance + ? WHERE Name = ? AND Username = ?";
+    try (Connection conn = DatabaseManager.getConnection();
+         PreparedStatement pstmt = conn.prepareStatement(sql)) {
+        pstmt.setDouble(1, amount);
+        pstmt.setString(2, this.name);
+        pstmt.setString(3, this.username);
+        int affectedRows = pstmt.executeUpdate();
+        if (affectedRows > 0) {
+            this.cashBalance += amount;
+            System.out.printf("Deposited $%.2f successfully. New balance: $%.2f\n", amount, cashBalance);
+        } else {
+            System.out.println("Failed to deposit. Please try again.");
+        }
+    } catch (SQLException e) {
+        System.out.println("Error depositing cash: " + e.getMessage());
+    }
     }
 
     public List<StockHolding> getHoldings() {
@@ -48,15 +68,14 @@ public class Portfolio {
     }
 
     public void buyStock(String symbol, int quantity) {
-        double latestPrice = getLatestClosePrice(symbol);
-        if (latestPrice == -1) {
-            System.out.println("Unable to retrieve the latest price for " + symbol);
-            return;
-        }
+    double latestPrice = getLatestClosePrice(symbol);
+    if (latestPrice == -1) {
+        System.out.println("Unable to retrieve the latest price for " + symbol);
+        return;
+    }
 
-        double cost = quantity * latestPrice;
-
-        if (cost > cashBalance) {
+    double cost = quantity * latestPrice;
+    if (cost > cashBalance) {
         System.out.println("Insufficient funds to buy stocks. Current balance: $" + cashBalance);
         return;
     }

@@ -107,11 +107,11 @@ public class StockList {
         try {
             System.out.println("\n--- Stock List Analysis: " + this.name + " ---");
 
-            LocalDate startDate = getDateInput(scanner, "Enter start date (YYYY-MM-DD) or press enter for 1 year ago: ");
+            LocalDate startDate = getDateInput(scanner, "Enter start date (YYYY-MM-DD) or press enter for 1st given data: ");
             var endDate = getDateInput(scanner, "Enter end date (YYYY-MM-DD) or press enter for today: ");
 
             if (startDate == null) {
-                startDate = LocalDate.now().minusYears(1);
+                startDate = LocalDate.of(2013, 2, 8);
             }
             if (endDate == null) {
                 endDate = LocalDate.now();

@@ -91,14 +91,16 @@ public class Portfolio {
                 System.out.println("Bought " + quantity + " shares of " + symbol + " for $" + cost);
             } catch (SQLException e) {
                 conn.rollback();
-                System.out.println("Transaction failed. Rolling back.");
-                e.printStackTrace();
+                if (e.getMessage().contains("violates foreign key constraint")) {
+                    System.out.println("Error: The stock symbol " + symbol + " is not recognized in our system.");
+                } else {
+                    System.out.println("Transaction failed. Error: " + e.getMessage());
+                }
             } finally {
                 conn.setAutoCommit(true);
             }
         } catch (SQLException e) {
-            System.out.println("Database operation failed.");
-            e.printStackTrace();
+            System.out.println("Database operation failed. Error: " + e.getMessage());
         }
     } else {
         System.out.println("Insufficient funds to buy stocks.");
@@ -106,83 +108,80 @@ public class Portfolio {
 }
 
     public void sellStock(String symbol, int quantity) {
-        double latestPrice = getLatestClosePrice(symbol);
-        if (latestPrice == -1) {
-            System.out.println("Unable to retrieve the latest price for " + symbol);
-            return;
-        }
+    double latestPrice = getLatestClosePrice(symbol);
+    if (latestPrice == -1) {
+        System.out.println("Unable to retrieve the latest price for " + symbol);
+        return;
+    }
 
-        String checkSharesSql = "SELECT Shares FROM StockHolding WHERE PortfolioName = ? AND Username = ? AND Symbol = ?";
-        String updatePortfolioSql = "UPDATE Portfolio SET CashBalance = CashBalance + ? WHERE Name = ? AND Username = ?";
-        String updateHoldingSql = "UPDATE StockHolding SET Shares = Shares - ?, "
-                + "AveragePurchasePrice = CASE WHEN Shares - ? > 0 THEN AveragePurchasePrice ELSE 0 END "
-                + "WHERE PortfolioName = ? AND Username = ? AND Symbol = ?";
-        String deleteHoldingSql = "DELETE FROM StockHolding WHERE PortfolioName = ? AND Username = ? AND Symbol = ? AND Shares = 0";
+    String checkSharesSql = "SELECT Shares FROM StockHolding WHERE PortfolioName = ? AND Username = ? AND Symbol = ?";
+    String updatePortfolioSql = "UPDATE Portfolio SET CashBalance = CashBalance + ? WHERE Name = ? AND Username = ?";
+    String updateHoldingSql = "UPDATE StockHolding SET Shares = Shares - ? WHERE PortfolioName = ? AND Username = ? AND Symbol = ?";
+    String deleteHoldingSql = "DELETE FROM StockHolding WHERE PortfolioName = ? AND Username = ? AND Symbol = ? AND Shares = 0";
 
-        try (Connection conn = DatabaseManager.getConnection()) {
-            conn.setAutoCommit(false);
-            try {
-                // Check if enough shares are available
-                int availableShares = 0;
-                try (PreparedStatement pstmt = conn.prepareStatement(checkSharesSql)) {
+    try (Connection conn = DatabaseManager.getConnection()) {
+        conn.setAutoCommit(false);
+        try {
+            // Check if enough shares are available
+            int availableShares = 0;
+            try (PreparedStatement pstmt = conn.prepareStatement(checkSharesSql)) {
+                pstmt.setString(1, this.name);
+                pstmt.setString(2, this.username);
+                pstmt.setString(3, symbol);
+                ResultSet rs = pstmt.executeQuery();
+                if (rs.next()) {
+                    availableShares = rs.getInt("Shares");
+                }
+            }
+
+            if (availableShares >= quantity) {
+                double earnings = quantity * latestPrice;
+
+                // Update portfolio cash balance
+                try (PreparedStatement pstmt = conn.prepareStatement(updatePortfolioSql)) {
+                    pstmt.setDouble(1, earnings);
+                    pstmt.setString(2, this.name);
+                    pstmt.setString(3, this.username);
+                    pstmt.executeUpdate();
+                }
+
+                // Update stock holding
+                try (PreparedStatement pstmt = conn.prepareStatement(updateHoldingSql)) {
+                    pstmt.setInt(1, quantity);
+                    pstmt.setString(2, this.name);
+                    pstmt.setString(3, this.username);
+                    pstmt.setString(4, symbol);
+                    pstmt.executeUpdate();
+                }
+
+                // Remove holding if shares become 0
+                try (PreparedStatement pstmt = conn.prepareStatement(deleteHoldingSql)) {
                     pstmt.setString(1, this.name);
                     pstmt.setString(2, this.username);
                     pstmt.setString(3, symbol);
-                    ResultSet rs = pstmt.executeQuery();
-                    if (rs.next()) {
-                        availableShares = rs.getInt("Shares");
-                    }
+                    pstmt.executeUpdate();
                 }
 
-                if (availableShares >= quantity) {
-                    double earnings = quantity * latestPrice;
-
-                    // Update portfolio cash balance
-                    try (PreparedStatement pstmt = conn.prepareStatement(updatePortfolioSql)) {
-                        pstmt.setDouble(1, earnings);
-                        pstmt.setString(2, this.name);
-                        pstmt.setString(3, this.username);
-                        pstmt.executeUpdate();
-                    }
-
-                    // Update stock holding
-                    try (PreparedStatement pstmt = conn.prepareStatement(updateHoldingSql)) {
-                        pstmt.setInt(1, quantity);
-                        pstmt.setString(2, this.name);
-                        pstmt.setString(3, this.username);
-                        pstmt.setString(4, symbol);
-                        pstmt.executeUpdate();
-                    }
-
-                    // Remove holding if shares become 0
-                    try (PreparedStatement pstmt = conn.prepareStatement(deleteHoldingSql)) {
-                        pstmt.setString(1, this.name);
-                        pstmt.setString(2, this.username);
-                        pstmt.setString(3, symbol);
-                        pstmt.executeUpdate();
-                    }
-
-                    conn.commit();
-                    cashBalance += earnings;
-                    updateLocalHoldings(symbol, -quantity, latestPrice);
-                    refreshCashBalance();
-                    System.out.println("Sold " + quantity + " shares of " + symbol + " for $" + earnings);
-                } else {
-                    System.out.println("Insufficient shares to sell.");
-                }
-            } catch (SQLException e) {
-                conn.rollback();
-                System.out.println("Transaction failed. Rolling back.");
-                e.printStackTrace();
-            } finally {
-                conn.setAutoCommit(true);
+                conn.commit();
+                cashBalance += earnings;
+                updateLocalHoldings(symbol, -quantity, latestPrice);
+                refreshCashBalance();
+                System.out.println("Sold " + quantity + " shares of " + symbol + " for $" + earnings);
+            } else {
+                System.out.println("Insufficient shares to sell. You only have " + availableShares + " shares of " + symbol);
             }
         } catch (SQLException e) {
-            System.out.println("Database operation failed.");
+            conn.rollback();
+            System.out.println("Transaction failed. Rolling back. Error: " + e.getMessage());
             e.printStackTrace();
+        } finally {
+            conn.setAutoCommit(true);
         }
+    } catch (SQLException e) {
+        System.out.println("Database operation failed. Error: " + e.getMessage());
+        e.printStackTrace();
     }
-
+}
     public double getLatestClosePrice(String symbol) {
     String sql = "SELECT close FROM Stocks WHERE symbol = ? AND timestamp <= ? ORDER BY timestamp DESC LIMIT 1";
     try (Connection conn = DatabaseManager.getConnection(); 

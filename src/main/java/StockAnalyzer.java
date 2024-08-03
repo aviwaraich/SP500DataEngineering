@@ -26,61 +26,76 @@ public class StockAnalyzer {
     }
 
     public Map<String, Double> calculateBetass(List<String> symbols, LocalDate startDate, LocalDate endDate) throws SQLException {
-        Map<String, Double> betas = new HashMap<>();
-        String sql = "WITH stock_returns AS ("
-            + "    SELECT symbol, timestamp, (close - LAG(close) OVER (PARTITION BY symbol ORDER BY timestamp)) / LAG(close) OVER (PARTITION BY symbol ORDER BY timestamp) AS return "
-            + "    FROM Stocks "
-            + "    WHERE symbol IN (" + String.join(",", Collections.nCopies(symbols.size(), "?")) + ") AND timestamp BETWEEN ? AND ?"
-            + "), "
-            + "market_returns AS ("
-            + "    SELECT timestamp, AVG(return) AS market_return "
-            + "    FROM stock_returns "
-            + "    GROUP BY timestamp"
-            + ") "
-            + "SELECT sr.symbol, "
-            + "       COVAR_POP(sr.return, mr.market_return) / VAR_POP(mr.market_return) AS beta "
-            + "FROM stock_returns sr "
-            + "JOIN market_returns mr ON sr.timestamp = mr.timestamp "
-            + "GROUP BY sr.symbol";
+    Map<String, Double> betas = new HashMap<>();
+    String sql = "WITH stock_returns AS ("
+        + "    SELECT symbol, timestamp, (close - LAG(close) OVER (PARTITION BY symbol ORDER BY timestamp)) / LAG(close) OVER (PARTITION BY symbol ORDER BY timestamp) AS return "
+        + "    FROM Stocks "
+        + "    WHERE symbol IN (" + String.join(",", Collections.nCopies(symbols.size(), "?")) + ") AND timestamp BETWEEN ? AND ?"
+        + "), "
+        + "market_returns AS ("
+        + "    SELECT timestamp, AVG(return) AS market_return "
+        + "    FROM stock_returns "
+        + "    GROUP BY timestamp"
+        + ") "
+        + "SELECT sr.symbol, "
+        + "       COVAR_POP(sr.return, mr.market_return) / NULLIF(VAR_POP(mr.market_return), 0) AS beta "
+        + "FROM stock_returns sr "
+        + "JOIN market_returns mr ON sr.timestamp = mr.timestamp "
+        + "GROUP BY sr.symbol";
 
-        try (PreparedStatement pstmt = conn.prepareStatement(sql)) {
-            int paramIndex = 1;
-            for (String symbol : symbols) {
-                pstmt.setString(paramIndex++, symbol);
-            }
-            pstmt.setDate(paramIndex++, java.sql.Date.valueOf(startDate));
-            pstmt.setDate(paramIndex, java.sql.Date.valueOf(endDate));
+    try (PreparedStatement pstmt = conn.prepareStatement(sql)) {
+        int paramIndex = 1;
+        for (String symbol : symbols) {
+            pstmt.setString(paramIndex++, symbol);
+        }
+        pstmt.setDate(paramIndex++, java.sql.Date.valueOf(startDate));
+        pstmt.setDate(paramIndex, java.sql.Date.valueOf(endDate));
 
-            ResultSet rs = pstmt.executeQuery();
-            while (rs.next()) {
-                betas.put(rs.getString("symbol"), rs.getDouble("beta"));
+        ResultSet rs = pstmt.executeQuery();
+        while (rs.next()) {
+            String symbol = rs.getString("symbol");
+            Double beta = rs.getDouble("beta");
+            if (!rs.wasNull() && !Double.isNaN(beta) && !Double.isInfinite(beta)) {
+                betas.put(symbol, beta);
+            } else {
+                betas.put(symbol, null);
             }
         }
-        return betas;
     }
+    return betas;
+}
 
-    public Map<String, Double> calculateCoVss(List<String> symbols, LocalDate startDate, LocalDate endDate) throws SQLException {
-        Map<String, Double> covs = new HashMap<>();
-        String sql = "SELECT symbol, STDDEV(close) / AVG(close) AS cov "
-            + "FROM Stocks "
-            + "WHERE symbol IN (" + String.join(",", Collections.nCopies(symbols.size(), "?")) + ") AND timestamp BETWEEN ? AND ? "
-            + "GROUP BY symbol";
+public Map<String, Double> calculateCoVss(List<String> symbols, LocalDate startDate, LocalDate endDate) throws SQLException {
+    Map<String, Double> covs = new HashMap<>();
+    String sql = "SELECT symbol, "
+        + "       CASE WHEN AVG(close) = 0 THEN NULL "
+        + "            ELSE STDDEV(close) / NULLIF(AVG(close), 0) "
+        + "       END AS cov "
+        + "FROM Stocks "
+        + "WHERE symbol IN (" + String.join(",", Collections.nCopies(symbols.size(), "?")) + ") AND timestamp BETWEEN ? AND ? "
+        + "GROUP BY symbol";
 
-        try (PreparedStatement pstmt = conn.prepareStatement(sql)) {
-            int paramIndex = 1;
-            for (String symbol : symbols) {
-                pstmt.setString(paramIndex++, symbol);
-            }
-            pstmt.setDate(paramIndex++, java.sql.Date.valueOf(startDate));
-            pstmt.setDate(paramIndex, java.sql.Date.valueOf(endDate));
+    try (PreparedStatement pstmt = conn.prepareStatement(sql)) {
+        int paramIndex = 1;
+        for (String symbol : symbols) {
+            pstmt.setString(paramIndex++, symbol);
+        }
+        pstmt.setDate(paramIndex++, java.sql.Date.valueOf(startDate));
+        pstmt.setDate(paramIndex, java.sql.Date.valueOf(endDate));
 
-            ResultSet rs = pstmt.executeQuery();
-            while (rs.next()) {
-                covs.put(rs.getString("symbol"), rs.getDouble("cov"));
+        ResultSet rs = pstmt.executeQuery();
+        while (rs.next()) {
+            String symbol = rs.getString("symbol");
+            Double cov = rs.getDouble("cov");
+            if (!rs.wasNull() && !Double.isNaN(cov) && !Double.isInfinite(cov)) {
+                covs.put(symbol, cov);
+            } else {
+                covs.put(symbol, null);
             }
         }
-        return covs;
     }
+    return covs;
+}
 
     public Map<String, Map<String, Double>> calculateCorrelationMatrix(List<String> symbols, LocalDate startDate, LocalDate endDate) throws SQLException {
         Map<String, Map<String, Double>> correlationMatrix = new HashMap<>();
@@ -116,24 +131,45 @@ public class StockAnalyzer {
     }
 
     public void addNewStockData(String symbol, LocalDate date, double open, double high, double low, double close, int volume) throws SQLException {
-        String sql = "INSERT INTO Stocks (timestamp, Symbol, Open, High, Low, Close, Volume) "
-                + "VALUES (?, ?, ?, ?, ?, ?, ?) "
-                + "ON CONFLICT (timestamp, Symbol) DO UPDATE SET "
-                + "Open = EXCLUDED.Open, High = EXCLUDED.High, Low = EXCLUDED.Low, "
-                + "Close = EXCLUDED.Close, Volume = EXCLUDED.Volume";
+    // First, ensure the stock exists in the Stock table
+    String checkStockSql = "INSERT INTO Stock (Symbol) VALUES (?) ON CONFLICT (Symbol) DO NOTHING";
+    String insertDataSql = "INSERT INTO Stocks (timestamp, Symbol, Open, High, Low, Close, Volume) "
+            + "VALUES (?, ?, ?, ?, ?, ?, ?) "
+            + "ON CONFLICT (timestamp, Symbol) DO UPDATE SET "
+            + "Open = EXCLUDED.Open, High = EXCLUDED.High, Low = EXCLUDED.Low, "
+            + "Close = EXCLUDED.Close, Volume = EXCLUDED.Volume";
 
-        try (PreparedStatement pstmt = conn.prepareStatement(sql)) {
-            pstmt.setTimestamp(1, java.sql.Timestamp.valueOf(date.atStartOfDay()));
-            pstmt.setString(2, symbol);
-            pstmt.setDouble(3, open);
-            pstmt.setDouble(4, high);
-            pstmt.setDouble(5, low);
-            pstmt.setDouble(6, close);
-            pstmt.setInt(7, volume);
+    try (Connection conn = DatabaseManager.getConnection()) {
+        conn.setAutoCommit(false);
+        try {
+            // Ensure stock exists
+            try (PreparedStatement pstmt = conn.prepareStatement(checkStockSql)) {
+                pstmt.setString(1, symbol);
+                pstmt.executeUpdate();
+            }
 
-            pstmt.executeUpdate();
+            // Insert or update stock data
+            try (PreparedStatement pstmt = conn.prepareStatement(insertDataSql)) {
+                pstmt.setTimestamp(1, java.sql.Timestamp.valueOf(date.atStartOfDay()));
+                pstmt.setString(2, symbol);
+                pstmt.setDouble(3, open);
+                pstmt.setDouble(4, high);
+                pstmt.setDouble(5, low);
+                pstmt.setDouble(6, close);
+                pstmt.setInt(7, volume);
+
+                pstmt.executeUpdate();
+            }
+
+            conn.commit();
+        } catch (SQLException e) {
+            conn.rollback();
+            throw e;
+        } finally {
+            conn.setAutoCommit(true);
         }
     }
+}
 
     public List<String> getAllStockSymbols() throws SQLException {
         List<String> symbols = new ArrayList<>();
@@ -147,7 +183,23 @@ public class StockAnalyzer {
     }
 
     public Map<String, Object> analyzeStock(String symbol, LocalDate startDate, LocalDate endDate) throws SQLException {
-        Map<String, Object> analysis = new HashMap<>();
+        String countSql = "SELECT COUNT(*) as count FROM Stocks WHERE symbol = ? AND timestamp BETWEEN ? AND ?";
+    try (PreparedStatement pstmt = conn.prepareStatement(countSql)) {
+        pstmt.setString(1, symbol);
+        pstmt.setDate(2, java.sql.Date.valueOf(startDate));
+        pstmt.setDate(3, java.sql.Date.valueOf(endDate));
+
+        try (ResultSet rs = pstmt.executeQuery()) {
+            if (rs.next()) {
+                int count = rs.getInt("count");
+                if (count <= 1) {
+                    throw new SQLException("Not enough information available for " + symbol + " to perform analysis.");
+                }
+            }
+        }
+    }
+
+    Map<String, Object> analysis = new HashMap<>();
 
         List<String> symbols = Collections.singletonList(symbol);
         Map<String, Double> betas = calculateBetass(symbols, startDate, endDate);

@@ -9,6 +9,7 @@ public class StockListItem {
 
     public String getSymbol() { return symbol; }
     public int getShares() { return shares; }
+    public void setShares(int shares) { this.shares = shares; }
 
     @Override
     public String toString() {

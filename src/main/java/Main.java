@@ -4,7 +4,9 @@ import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.time.LocalDate;
+import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Scanner;
@@ -607,7 +609,6 @@ private static List<StockList> getShareableStockLists(String username) {
     try {
         System.out.println("\n--- Portfolio Analysis ---");
 
-        // Fetch all stock holdings for this portfolio
         String holdingsQuery = "SELECT Symbol, Shares FROM StockHolding WHERE PortfolioName = ? AND Username = ?";
         try (Connection conn = DatabaseManager.getConnection();
              PreparedStatement pstmt = conn.prepareStatement(holdingsQuery)) {
@@ -616,8 +617,7 @@ private static List<StockList> getShareableStockLists(String username) {
             ResultSet rs = pstmt.executeQuery();
 
             List<String> symbols = new ArrayList<>();
-            LocalDate startDate = null;
-            LocalDate endDate = null;
+            double totalPortfolioValue = getCashBalance(portfolioName, username);
 
             while (rs.next()) {
                 String symbol = rs.getString("Symbol");
@@ -629,56 +629,46 @@ private static List<StockList> getShareableStockLists(String username) {
                 // Get the date range for this stock
                 LocalDate symbolStartDate = getEarliestStockDate(symbol);
                 LocalDate symbolEndDate = getLatestStockDate(symbol);
-                System.out.println("Analysis period: " + symbolStartDate + " to " + symbolEndDate);
-
-                // Update overall start and end dates
-                if (startDate == null || symbolStartDate.isBefore(startDate)) {
-                    startDate = symbolStartDate;
-                }
-                if (endDate == null || symbolEndDate.isAfter(endDate)) {
-                    endDate = symbolEndDate;
-                }
+                System.out.println("Data available from " + symbolStartDate + " to " + symbolEndDate);
 
                 double lastClosingPrice = getLatestClosePrice(symbol);
                 System.out.println("Last Closing Price: $" + String.format("%.2f", lastClosingPrice));
 
                 double currentValue = shares * lastClosingPrice;
                 System.out.printf("Current Holding Value: $%.2f\n", currentValue);
+
+                totalPortfolioValue += currentValue;
+
+                // Check if there's enough data for analysis
+                long daysBetween = ChronoUnit.DAYS.between(symbolStartDate, symbolEndDate);
+                if (daysBetween < 2) {
+                    System.out.println("Not enough historical data for detailed analysis.");
+                    continue;
+                }
+
+                // Perform detailed analysis only if there's enough data
+                try {
+                    Map<String, Double> betas = analyzer.calculateBetass(Collections.singletonList(symbol), symbolStartDate, symbolEndDate);
+                    Double beta = betas.get(symbol);
+                    if (beta != null && !Double.isNaN(beta) && !Double.isInfinite(beta)) {
+                        System.out.println("Beta: " + String.format("%.4f", beta));
+                    } else {
+                        System.out.println("Beta: Not enough data");
+                    }
+
+                    Map<String, Double> covs = analyzer.calculateCoVss(Collections.singletonList(symbol), symbolStartDate, symbolEndDate);
+                    Double cov = covs.get(symbol);
+                    if (cov != null && !Double.isNaN(cov) && !Double.isInfinite(cov)) {
+                        System.out.println("Coefficient of Variation: " + String.format("%.4f", cov));
+                    } else {
+                        System.out.println("Coefficient of Variation: Not enough data");
+                    }
+                } catch (SQLException e) {
+                    System.out.println("Error calculating statistics: " + e.getMessage());
+                }
             }
 
             if (!symbols.isEmpty()) {
-                // Calculate betas
-                Map<String, Double> betas = analyzer.calculateBetass(symbols, startDate, endDate);
-                for (String symbol : symbols) {
-                    System.out.println("Beta for " + symbol + ": " + String.format("%.4f", betas.get(symbol)));
-                }
-
-                // Calculate CoVs
-                Map<String, Double> covs = analyzer.calculateCoVss(symbols, startDate, endDate);
-                for (String symbol : symbols) {
-                    System.out.println("Coefficient of Variation for " + symbol + ": " + String.format("%.4f", covs.get(symbol)));
-                }
-
-                // Calculate correlation matrix
-                System.out.println("\nCorrelation Matrix:");
-                Map<String, Map<String, Double>> correlationMatrix = analyzer.calculateCorrelationMatrix(symbols, startDate, endDate);
-                for (String symbol1 : correlationMatrix.keySet()) {
-                    for (String symbol2 : correlationMatrix.get(symbol1).keySet()) {
-                        System.out.printf("%s - %s: %.4f\n", symbol1, symbol2, correlationMatrix.get(symbol1).get(symbol2));
-                    }
-                }
-
-                // Calculate total portfolio value
-                double totalPortfolioValue = getCashBalance(portfolioName, username);
-                for (String symbol : symbols) {
-                    try {
-                        double latestPrice = getLatestClosePrice(symbol);
-                        int shares = getShares(portfolioName, username, symbol);
-                        totalPortfolioValue += latestPrice * shares;
-                    } catch (SQLException e) {
-                        System.out.println("Error calculating value for " + symbol + ": " + e.getMessage());
-                    }
-                }
                 System.out.printf("\nTotal Portfolio Value: $%.2f\n", totalPortfolioValue);
             } else {
                 System.out.println("This portfolio has no stock holdings.");
@@ -811,9 +801,7 @@ private static double getCashBalance(String portfolioName, String username) thro
 
     private static void analyzeAnyStock() {
         try {
-            System.out.println("\n--- Available Stocks ---");
             List<String> symbols = analyzer.getAllStockSymbols();
-            symbols.forEach(System.out::println);
 
             System.out.print("Enter the stock symbol to analyze: ");
             String symbol = scanner.nextLine();

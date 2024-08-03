@@ -462,7 +462,7 @@ public class User {
                 // Check if the user has permission to view this stock list
                 if (isPublic || creator.equals(this.username) || isStockListSharedWithUser(listID, this.username)) {
                     stockList.setReviews(loadStockListReviews(listID));
-                    stockList.setStocks(loadStockListStocks(listID)); // Add this line
+                    stockList.setStockItems(loadStockListStocks(listID));
                     return stockList;
                 } else {
                     System.out.println("You do not have permission to view this stock list.");
@@ -478,8 +478,8 @@ public class User {
 }
 
 // Add this method to User class
-private List<Stock> loadStockListStocks(int listID) {
-    List<Stock> stocks = new ArrayList<>();
+private List<StockListItem> loadStockListStocks(int listID) {
+    List<StockListItem> stockItems = new ArrayList<>();
     String sql = "SELECT Symbol, Shares FROM StockListItem WHERE ListID = ?";
 
     try (Connection conn = DatabaseManager.getConnection();
@@ -491,13 +491,13 @@ private List<Stock> loadStockListStocks(int listID) {
             while (rs.next()) {
                 String symbol = rs.getString("Symbol");
                 int shares = rs.getInt("Shares");
-                stocks.add(new Stock(symbol, shares));
+                stockItems.add(new StockListItem(symbol, shares));
             }
         }
     } catch (SQLException e) {
         e.printStackTrace();
     }
-    return stocks;
+    return stockItems;
 }
 
     private List<Review> loadStockListReviews(int listID) {
@@ -715,32 +715,73 @@ private List<Stock> loadStockListStocks(int listID) {
     }
 
     // Add stock to a stock list
-    public boolean addStockToList(int listID, String symbol, int share) {
-        // Check if the user owns the stock list
-        StockList list = getStockList(listID);
-        if (list != null && list.getCreator().equals(this.username)) {
-            String sql = "INSERT INTO StockListItem (ListID, Symbol, Shares) VALUES (?, ?, ?)";
+    public boolean addStockToList(int listID, String symbol, int shares) {
+    StockList list = getStockList(listID);
+    if (list != null && list.getCreator().equals(this.username)) {
+        String checkStockSql = "SELECT 1 FROM Stocks WHERE Symbol = ?";
+        String checkItemSql = "SELECT Shares FROM StockListItem WHERE ListID = ? AND Symbol = ?";
+        String insertSql = "INSERT INTO StockListItem (ListID, Symbol, Shares) VALUES (?, ?, ?)";
+        String updateSql = "UPDATE StockListItem SET Shares = Shares + ? WHERE ListID = ? AND Symbol = ?";
 
-            try (Connection conn = DatabaseManager.getConnection(); PreparedStatement pstmt = conn.prepareStatement(sql)) {
-
-                pstmt.setInt(1, listID);
-                pstmt.setString(2, symbol);
-                pstmt.setInt(3, share);
-
-                int affectedRows = pstmt.executeUpdate();
-                if (affectedRows > 0) {
-                    // Update the stock list in the User object
-                    list.addStock(new Stock(symbol,share));
-                    return true;
+        try (Connection conn = DatabaseManager.getConnection()) {
+            // First, check if the stock exists in the Stocks table
+            try (PreparedStatement checkStockStmt = conn.prepareStatement(checkStockSql)) {
+                checkStockStmt.setString(1, symbol);
+                ResultSet rs = checkStockStmt.executeQuery();
+                if (!rs.next()) {
+                    System.out.println("This stock symbol does not exist in our database.");
+                    return false;
                 }
-            } catch (SQLException e) {
-                e.printStackTrace();
             }
-        } else {
-            System.out.println("You do not own this stock list and cannot add stocks to it.");
+
+            // Now check if the stock is already in the list
+            try (PreparedStatement checkItemStmt = conn.prepareStatement(checkItemSql)) {
+                checkItemStmt.setInt(1, listID);
+                checkItemStmt.setString(2, symbol);
+                ResultSet rs = checkItemStmt.executeQuery();
+                
+                if (rs.next()) {
+                    // Stock already exists in the list, update shares
+                    try (PreparedStatement updateStmt = conn.prepareStatement(updateSql)) {
+                        updateStmt.setInt(1, shares);
+                        updateStmt.setInt(2, listID);
+                        updateStmt.setString(3, symbol);
+                        updateStmt.executeUpdate();
+                    }
+                } else {
+                    // Stock doesn't exist in the list, insert new record
+                    try (PreparedStatement insertStmt = conn.prepareStatement(insertSql)) {
+                        insertStmt.setInt(1, listID);
+                        insertStmt.setString(2, symbol);
+                        insertStmt.setInt(3, shares);
+                        insertStmt.executeUpdate();
+                    }
+                }
+            }
+            
+            // Update the stock list in memory
+            StockListItem itemToUpdate = list.getStockItems().stream()
+                .filter(item -> item.getSymbol().equals(symbol))
+                .findFirst()
+                .orElse(null);
+
+            if (itemToUpdate != null) {
+                itemToUpdate.setShares(itemToUpdate.getShares() + shares);
+            } else {
+                list.addStockItem(new StockListItem(symbol, shares));
+            }
+            
+            
+            return true;
+        } catch (SQLException e) {
+            e.printStackTrace();
+            System.out.println("Failed to add stock. Please try again.");
         }
-        return false;
+    } else {
+        System.out.println("You do not own this stock list and cannot add stocks to it.");
     }
+    return false;
+}
 
     // Delete stock from a stock list
     public boolean deleteStockFromList(int listID, String symbol) {

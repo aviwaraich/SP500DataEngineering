@@ -4,11 +4,8 @@ import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.time.LocalDate;
-import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
-import java.util.Map;
 import java.util.Scanner;
 
 public class Main {
@@ -59,10 +56,9 @@ public class Main {
         System.out.println("2. Create New Portfolio");
         System.out.println("3. Manage Portfolio");
         System.out.println("4. Social Features");
-        System.out.println("5. Analyze Portfolio");
-        System.out.println("6. Add New Stock Data");
-        System.out.println("7. Analyze Any Stock");
-        System.out.println("8. Log out");
+        System.out.println("5. Add New Stock Data");
+        System.out.println("6. Analyze Any Stock");
+        System.out.println("7. Log out");
         System.out.print("Choose an option: ");
 
         int choice = scanner.nextInt();
@@ -82,26 +78,12 @@ public class Main {
                 showSocialMenu();
                 break;
             case 5:
-                if (loggedInUser.getPortfolios().isEmpty()) {
-                    System.out.println("You don't have any portfolios to analyze.");
-                } else {
-                    System.out.print("Enter portfolio name to analyze: ");
-                    String portfolioName = scanner.nextLine();
-                    Portfolio portfolioToAnalyze = loggedInUser.getPortfolio(portfolioName);
-                    if (portfolioToAnalyze != null) {
-                        analyzePortfolio(portfolioName, loggedInUser.getUsername());
-                    } else {
-                        System.out.println("Portfolio not found.");
-                    }
-                }
-                break;
-            case 6:
                 addNewStockData();
                 break;
-            case 7:
+            case 6:
                 analyzeAnyStock();
                 break;
-            case 8:
+            case 7:
                 loggedInUser = null;
                 System.out.println("Logged out successfully.");
                 break;
@@ -178,7 +160,7 @@ public class Main {
                 }
 
                 if (totalCost > 0) {
-                    double portfolioPerformance = ((totalValue - totalCost) / totalCost) * 100;
+                    double portfolioPerformance = totalCost > 0 ? ((totalValue - totalCost) / totalCost) * 100 : 0;
                     System.out.printf("Total Portfolio Value: $%.2f\n", totalValue);
                     System.out.printf("Total Portfolio Performance: %.2f%% %s\n",
                             Math.abs(portfolioPerformance),
@@ -211,33 +193,35 @@ public class Main {
     }
 
     private static void managePortfolio() {
-        System.out.print("Enter portfolio name: ");
-        String name = scanner.nextLine();
+    System.out.print("Enter portfolio name: ");
+    String name = scanner.nextLine();
 
-        Portfolio portfolio = loggedInUser.getPortfolio(name);
-        if (portfolio == null) {
-            System.out.println("Portfolio not found.");
-            return;
-        }
+    Portfolio portfolio = loggedInUser.getPortfolio(name);
+    if (portfolio == null) {
+        System.out.println("Portfolio not found.");
+        return;
+    }
 
-        while (true) {
-            System.out.println("\n--- Manage Portfolio ---");
-            System.out.println("1. View Portfolio Details");
-            System.out.println("2. Buy Stock");
-            System.out.println("3. Sell Stock");
-            System.out.println("4. Deposit Cash");
-            System.out.println("5. Withdraw Cash");
-            System.out.println("6. View Stock History");
-            System.out.println("7. Predict Future Prices");
-            System.out.println("8. Return to Main Menu");
-            System.out.print("Choose an option: ");
+    while (true) {
+        System.out.println("\n--- Manage Portfolio ---");
+        System.out.println("1. View Portfolio Details");
+        System.out.println("2. Buy Stock");
+        System.out.println("3. Sell Stock");
+        System.out.println("4. Deposit Cash");
+        System.out.println("5. Withdraw Cash");
+        System.out.println("6. View Stock History");
+        System.out.println("7. Predict Future Prices");
+        System.out.println("8. Analyze Portfolio");
+        System.out.println("9. Return to Main Menu");
+        System.out.print("Choose an option: ");
 
-            int choice = scanner.nextInt();
-            scanner.nextLine();
+        int choice = scanner.nextInt();
+        scanner.nextLine();
+
 
             switch (choice) {
                 case 1:
-                    portfolio.viewDetails();
+                    viewMyPortfolio(portfolio);
                     break;
                 case 2:
                     buyStock(portfolio);
@@ -262,12 +246,15 @@ public class Main {
                     }
                     break;
                 case 8:
-                    return;
-                default:
-                    System.out.println("Invalid option. Please try again.");
-            }
+                portfolio.analyzePortfolio();
+                break;
+            case 9:
+                return;
+            default:
+                System.out.println("Invalid option. Please try again.");
         }
     }
+}
 
     private static void depositCash(Portfolio portfolio) {
         System.out.print("Enter amount to deposit: $");
@@ -318,7 +305,8 @@ public class Main {
             System.out.println("9. Delete Stock List");
             System.out.println("10. Share Stock List");
             System.out.println("11. View Stock List");
-            System.out.println("12. Return to Main Menu");
+            System.out.println("12. View Stock List Statistics");
+            System.out.println("13. Return to Main Menu");
             System.out.print("Choose an option: ");
 
             int choice = scanner.nextInt();
@@ -359,6 +347,9 @@ public class Main {
                     viewStockList();
                     break;
                 case 12:
+                    viewStockListStatistics();
+                    break;
+                case 13:
                     return; // This will exit the method and return to the main menu
                 default:
                     System.out.println("Invalid option. Please try again.");
@@ -562,11 +553,10 @@ public class Main {
     }
 
     private static void writeReview(int listID) {
-        System.out.print("Enter your review: ");
-        String reviewText = scanner.nextLine();
-        loggedInUser.writeReview(listID, reviewText);
-        System.out.println("Review added to stock list.");
-    }
+    System.out.print("Enter your review: ");
+    String reviewText = scanner.nextLine();
+    loggedInUser.writeReview(listID, reviewText);
+}
 
     private static void deleteReview(int listID) {
         System.out.print("Are you sure you want to delete your review? (yes/no): ");
@@ -605,78 +595,7 @@ public class Main {
         }
     }
 
-    public static void analyzePortfolio(String portfolioName, String username) {
-        try {
-            System.out.println("\n--- Portfolio Analysis ---");
-
-            String holdingsQuery = "SELECT Symbol, Shares FROM StockHolding WHERE PortfolioName = ? AND Username = ?";
-            try (Connection conn = DatabaseManager.getConnection(); PreparedStatement pstmt = conn.prepareStatement(holdingsQuery)) {
-                pstmt.setString(1, portfolioName);
-                pstmt.setString(2, username);
-                ResultSet rs = pstmt.executeQuery();
-
-                List<String> symbols = new ArrayList<>();
-                double totalPortfolioValue = getCashBalance(portfolioName, username);
-
-                while (rs.next()) {
-                    String symbol = rs.getString("Symbol");
-                    int shares = rs.getInt("Shares");
-                    symbols.add(symbol);
-
-                    System.out.println("\nAnalysis for " + symbol + ":");
-
-                    // Get the date range for this stock
-                    LocalDate symbolStartDate = getEarliestStockDate(symbol);
-                    LocalDate symbolEndDate = getLatestStockDate(symbol);
-                    System.out.println("Data available from " + symbolStartDate + " to " + symbolEndDate);
-
-                    double lastClosingPrice = getLatestClosePrice(symbol);
-                    System.out.println("Last Closing Price: $" + String.format("%.2f", lastClosingPrice));
-
-                    double currentValue = shares * lastClosingPrice;
-                    System.out.printf("Current Holding Value: $%.2f\n", currentValue);
-
-                    totalPortfolioValue += currentValue;
-
-                    // Check if there's enough data for analysis
-                    long daysBetween = ChronoUnit.DAYS.between(symbolStartDate, symbolEndDate);
-                    if (daysBetween < 2) {
-                        System.out.println("Not enough historical data for detailed analysis.");
-                        continue;
-                    }
-
-                    // Perform detailed analysis only if there's enough data
-                    try {
-                        Map<String, Double> betas = analyzer.calculateBetass(Collections.singletonList(symbol), symbolStartDate, symbolEndDate);
-                        Double beta = betas.get(symbol);
-                        if (beta != null && !Double.isNaN(beta) && !Double.isInfinite(beta)) {
-                            System.out.println("Beta: " + String.format("%.4f", beta));
-                        } else {
-                            System.out.println("Beta: Not enough data");
-                        }
-
-                        Map<String, Double> covs = analyzer.calculateCoVss(Collections.singletonList(symbol), symbolStartDate, symbolEndDate);
-                        Double cov = covs.get(symbol);
-                        if (cov != null && !Double.isNaN(cov) && !Double.isInfinite(cov)) {
-                            System.out.println("Coefficient of Variation: " + String.format("%.4f", cov));
-                        } else {
-                            System.out.println("Coefficient of Variation: Not enough data");
-                        }
-                    } catch (SQLException e) {
-                        System.out.println("Error calculating statistics: " + e.getMessage());
-                    }
-                }
-
-                if (!symbols.isEmpty()) {
-                    System.out.printf("\nTotal Portfolio Value: $%.2f\n", totalPortfolioValue);
-                } else {
-                    System.out.println("This portfolio has no stock holdings.");
-                }
-            }
-        } catch (SQLException e) {
-            System.out.println("Error analyzing portfolio: " + e.getMessage());
-        }
-    }
+    
 // Helper methods
 
     private static double getLatestClosePrice(String symbol) throws SQLException {
@@ -793,62 +712,78 @@ public class Main {
     }
 
     private static void analyzeAnyStock() {
-        try {
-            List<String> symbols = analyzer.getAllStockSymbols();
+    try {
+        List<String> symbols = analyzer.getAllStockSymbols();
 
-            System.out.print("Enter the stock symbol to analyze: ");
-            String symbol = scanner.nextLine();
+        System.out.print("Enter the stock symbol to analyze: ");
+        String symbol = scanner.nextLine();
 
-            LocalDate endDate = LocalDate.now();
-            LocalDate startDate = LocalDate.of(2013, 2, 8);
+        LocalDate endDate = LocalDate.now();
+        LocalDate startDate = LocalDate.of(2013, 2, 8);
 
-            Map<String, Object> analysis = analyzer.analyzeStock(symbol, startDate, endDate);
-
-            System.out.println("\n--- Stock Analysis for " + symbol + " ---");
-
-            double cov = (double) analysis.get("cov");
-            System.out.println("Coefficient of Variation: " + cov);
-            if (cov > 1) {
-                System.out.println("Explanation: The stock has high volatility relative to its average price (CoV > 1).");
-            } else if (cov < 1) {
-                System.out.println("Explanation: The stock has low volatility relative to its average price (CoV < 1).");
-            } else {
-                System.out.println("Explanation: The stock has average volatility relative to its average price (CoV = 1).");
-            }
-
-            List<Double> movingAverages = (List<Double>) analysis.get("movingAverages");
-            System.out.println("10-day Moving Average: " + movingAverages.get(0));
-            System.out.println("30-day Moving Average: " + movingAverages.get(1));
-            if (movingAverages.get(0) > movingAverages.get(1)) {
-                System.out.println("Explanation: The stock is experiencing upward momentum (10-day MA > 30-day MA).");
-            } else if (movingAverages.get(0) < movingAverages.get(1)) {
-                System.out.println("Explanation: The stock is experiencing downward momentum (10-day MA < 30-day MA).");
-            } else {
-                System.out.println("Explanation: The stock has stable momentum (10-day MA = 30-day MA).");
-            }
-
-            double[] rsi = (double[]) analysis.get("rsi");
-            System.out.println("Relative Strength: " + rsi[0]);
-            System.out.println("Relative Strength Index (RSI): " + rsi[1]);
-            if (rsi[1] > 70) {
-                System.out.println("Explanation: The stock is overbought (RSI > 70).");
-            } else if (rsi[1] < 30) {
-                System.out.println("Explanation: The stock is oversold (RSI < 30).");
-            } else {
-                System.out.println("Explanation: The stock is in a neutral state (30 <= RSI <= 70).");
-            }
-
-            System.out.println("\nPrice Predictions (next 7 days):");
-            List<Double> predictions = analyzer.predictFuturePrice(symbol, endDate, 7);
-            for (int i = 0; i < predictions.size(); i++) {
-                System.out.printf("Day %d: $%.2f\n", i + 1, predictions.get(i));
-            }
-
-        } catch (SQLException e) {
-            System.out.println("Error analyzing stock: " + e.getMessage());
+        System.out.print("Do you want to specify a custom date range for analysis? (y/n): ");
+        if (scanner.nextLine().trim().equalsIgnoreCase("y")) {
+            System.out.print("Enter start date for analysis (YYYY-MM-DD): ");
+            startDate = LocalDate.parse(scanner.nextLine());
+            System.out.print("Enter end date for analysis (YYYY-MM-DD): ");
+            endDate = LocalDate.parse(scanner.nextLine());
         }
-    }
 
+        System.out.println("\n--- Stock Analysis for " + symbol + " ---");
+        System.out.println("Analyzing data from " + startDate + " to " + endDate);
+
+        double cov = analyzer.calculateCoV(symbol, startDate, endDate);
+        System.out.println("Coefficient of Variation: " + cov);
+        if (cov > 1) {
+            System.out.println("Explanation: The stock has high volatility relative to its average price (CoV > 1).");
+        } else if (cov < 1) {
+            System.out.println("Explanation: The stock has low volatility relative to its average price (CoV < 1).");
+        } else {
+            System.out.println("Explanation: The stock has average volatility relative to its average price (CoV = 1).");
+        }
+
+        double beta = analyzer.calculateBeta(symbol, startDate, endDate);
+        System.out.println("Beta: " + beta);
+        if (beta > 1) {
+            System.out.println("Explanation: The stock is more volatile than the market (Beta > 1).");
+        } else if (beta < 1) {
+            System.out.println("Explanation: The stock is less volatile than the market (Beta < 1).");
+        } else {
+            System.out.println("Explanation: The stock has the same volatility as the market (Beta = 1).");
+        }
+
+        List<Double> movingAverages = analyzer.calculateMovingAverages(symbol, startDate, endDate);
+        System.out.println("10-day Moving Average: " + movingAverages.get(0));
+        System.out.println("30-day Moving Average: " + movingAverages.get(1));
+        if (movingAverages.get(0) > movingAverages.get(1)) {
+            System.out.println("Explanation: The stock is experiencing upward momentum (10-day MA > 30-day MA).");
+        } else if (movingAverages.get(0) < movingAverages.get(1)) {
+            System.out.println("Explanation: The stock is experiencing downward momentum (10-day MA < 30-day MA).");
+        } else {
+            System.out.println("Explanation: The stock has stable momentum (10-day MA = 30-day MA).");
+        }
+
+        double[] rsi = analyzer.calculateRSI(symbol, startDate, endDate);
+        System.out.println("Relative Strength: " + rsi[0]);
+        System.out.println("Relative Strength Index (RSI): " + rsi[1]);
+        if (rsi[1] > 70) {
+            System.out.println("Explanation: The stock is overbought (RSI > 70).");
+        } else if (rsi[1] < 30) {
+            System.out.println("Explanation: The stock is oversold (RSI < 30).");
+        } else {
+            System.out.println("Explanation: The stock is in a neutral state (30 <= RSI <= 70).");
+        }
+
+        System.out.println("\nPrice Predictions (next 7 days):");
+        List<Double> predictions = analyzer.predictFuturePrice(symbol, endDate, 7);
+        for (int i = 0; i < predictions.size(); i++) {
+            System.out.printf("Day %d: $%.2f\n", i + 1, predictions.get(i));
+        }
+
+    } catch (SQLException e) {
+        System.out.println("Error analyzing stock: " + e.getMessage());
+    }
+}
     private static void viewStockHistory(Portfolio portfolio) {
         System.out.print("Enter stock symbol: ");
         String symbol = scanner.nextLine();
@@ -858,4 +793,62 @@ public class Main {
             System.out.println("Error viewing stock history: " + e.getMessage());
         }
     }
+
+    private static void viewStockListStatistics() {
+    System.out.print("Enter the ID of the stock list to analyze: ");
+    int listID = scanner.nextInt();
+    scanner.nextLine(); 
+    loggedInUser.viewStockListStatistics(listID, scanner);
+}
+    private static void viewMyPortfolio(Portfolio portfolio) {
+        if (portfolio == null) {
+            System.out.println("You don't have any portfolios yet.");
+        } else {
+            System.out.println("\n--- Your Portfolio ---");
+                double totalValue = portfolio.getCashBalance();
+                double totalCost = 0;
+                System.out.println("Portfolio Name: " + portfolio.getName());
+                System.out.printf("Cash Balance: $%.2f\n", portfolio.getCashBalance());
+                System.out.println("Holdings:");
+
+                for (StockHolding holding : portfolio.getHoldings()) {
+                    String symbol = holding.getSymbol();
+                    int shares = holding.getShares();
+                    double currentPrice = portfolio.getLatestClosePrice(symbol);
+                    double purchasePrice = holding.getAveragePurchasePrice();
+                    double currentValue = shares * currentPrice;
+                    double cost = shares * purchasePrice;
+
+                    totalValue += currentValue;
+                    totalCost += cost;
+
+                    System.out.printf("  %s: %d shares\n", symbol, shares);
+                    System.out.printf("    Purchase Price: $%.2f\n", purchasePrice);
+                    if (currentPrice != -1) {
+                        double percentChange = ((currentPrice - purchasePrice) / purchasePrice) * 100;
+                        System.out.printf("    Current Price: $%.2f\n", currentPrice);
+                        System.out.printf("    Current Value: $%.2f\n", currentValue);
+                        System.out.printf("    Performance: %.2f%% %s\n", Math.abs(percentChange),
+                                percentChange > 0 ? "↑" : (percentChange < 0 ? "↓" : "−"));
+                    } else {
+                        System.out.println("    Current Price: Not available");
+                        System.out.println("    Current Value: Not available");
+                        System.out.println("    Performance: Not available");
+                    }
+                }
+
+                if (totalCost > 0) {
+                    double portfolioPerformance = totalCost > 0 ? ((totalValue - totalCost) / totalCost) * 100 : 0;
+                    System.out.printf("Total Portfolio Value: $%.2f\n", totalValue);
+                    System.out.printf("Total Portfolio Performance: %.2f%% %s\n",
+                            Math.abs(portfolioPerformance),
+                            portfolioPerformance > 0 ? "↑" : (portfolioPerformance < 0 ? "↓" : "−"));
+                } else {
+                    System.out.println("Total Portfolio Value: $" + totalValue);
+                    System.out.println("Total Portfolio Performance: N/A (no investments)");
+                }
+                System.out.println();
+        }
+    }
+
 }

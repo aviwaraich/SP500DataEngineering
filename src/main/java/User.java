@@ -6,6 +6,7 @@ import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
+import java.util.Scanner;
 
 public class User {
 
@@ -539,30 +540,46 @@ public class User {
     }
 
     public void writeReview(int listID, String content) {
-        String sql = "INSERT INTO Review (content, timestamp, username, listid) VALUES (?, ?, ?, ?)";
+    // First, check if the user has already written a review for this stock list
+    String checkExistingReviewSql = "SELECT COUNT(*) FROM Review WHERE username = ? AND listid = ?";
+    String insertReviewSql = "INSERT INTO Review (content, timestamp, username, listid) VALUES (?, ?, ?, ?)";
 
-        try (Connection conn = DatabaseManager.getConnection(); PreparedStatement pstmt = conn.prepareStatement(sql, PreparedStatement.RETURN_GENERATED_KEYS)) {
+    try (Connection conn = DatabaseManager.getConnection()) {
+        // Check for existing review
+        try (PreparedStatement checkStmt = conn.prepareStatement(checkExistingReviewSql)) {
+            checkStmt.setString(1, this.username);
+            checkStmt.setInt(2, listID);
+            ResultSet rs = checkStmt.executeQuery();
+            if (rs.next() && rs.getInt(1) > 0) {
+                System.out.println("You have already written a review for this stock list. You can't add another one.");
+                return;
+            }
+        }
 
-            pstmt.setString(1, content);
-            pstmt.setTimestamp(2, new java.sql.Timestamp(new java.util.Date().getTime()));
-            pstmt.setString(3, this.username);
-            pstmt.setInt(4, listID);
+        // If no existing review, proceed with insertion
+        try (PreparedStatement insertStmt = conn.prepareStatement(insertReviewSql, PreparedStatement.RETURN_GENERATED_KEYS)) {
+            insertStmt.setString(1, content);
+            insertStmt.setTimestamp(2, new java.sql.Timestamp(new java.util.Date().getTime()));
+            insertStmt.setString(3, this.username);
+            insertStmt.setInt(4, listID);
 
-            int affectedRows = pstmt.executeUpdate();
+            int affectedRows = insertStmt.executeUpdate();
             if (affectedRows > 0) {
-                try (ResultSet generatedKeys = pstmt.getGeneratedKeys()) {
+                try (ResultSet generatedKeys = insertStmt.getGeneratedKeys()) {
                     if (generatedKeys.next()) {
                         int reviewID = generatedKeys.getInt(1);
                         Review review = new Review(reviewID, content, new Date(), this.username, listID);
                         reviews.add(review);
+                        System.out.println("Review added successfully.");
                     }
                 }
             }
-
-        } catch (SQLException e) {
-            e.printStackTrace();
         }
+    } catch (SQLException e) {
+        System.out.println("Error writing review: " + e.getMessage());
+        e.printStackTrace();
     }
+}
 
     public void viewFriends() {
         if (friends.isEmpty()) {
@@ -637,29 +654,61 @@ public class User {
 
     // Delete a stock list
     public boolean deleteStockList(int listID) {
-        // Check if the user owns the stock list
-        StockList list = getStockList(listID);
-        if (list != null && list.getCreator().equals(this.username)) {
-            String sql = "DELETE FROM StockList WHERE listid = ?";
+    // Check if the user owns the stock list
+    StockList list = getStockList(listID);
+    if (list != null && list.getCreator().equals(this.username)) {
+        String deleteReviewsSql = "DELETE FROM Review WHERE listid = ?";
+        String deleteStockListItemsSql = "DELETE FROM StockListItem WHERE ListID = ?";
+        String deleteSharedStockListSql = "DELETE FROM SharedStockList WHERE listid = ?";
+        String deleteStockListSql = "DELETE FROM StockList WHERE listid = ?";
 
-            try (Connection conn = DatabaseManager.getConnection(); PreparedStatement pstmt = conn.prepareStatement(sql)) {
-
-                pstmt.setInt(1, listID);
-
-                int affectedRows = pstmt.executeUpdate();
-                if (affectedRows > 0) {
-                    // Update the stock list in the User object
-                    stockLists.removeIf(stockList -> stockList.getListID() == listID);
-                    return true;
+        try (Connection conn = DatabaseManager.getConnection()) {
+            conn.setAutoCommit(false);
+            try {
+                // Delete associated reviews
+                try (PreparedStatement pstmt = conn.prepareStatement(deleteReviewsSql)) {
+                    pstmt.setInt(1, listID);
+                    pstmt.executeUpdate();
                 }
+
+                // Delete associated stock list items
+                try (PreparedStatement pstmt = conn.prepareStatement(deleteStockListItemsSql)) {
+                    pstmt.setInt(1, listID);
+                    pstmt.executeUpdate();
+                }
+
+                // Delete shared stock list entries
+                try (PreparedStatement pstmt = conn.prepareStatement(deleteSharedStockListSql)) {
+                    pstmt.setInt(1, listID);
+                    pstmt.executeUpdate();
+                }
+
+                // Delete the stock list
+                try (PreparedStatement pstmt = conn.prepareStatement(deleteStockListSql)) {
+                    pstmt.setInt(1, listID);
+                    int affectedRows = pstmt.executeUpdate();
+                    if (affectedRows > 0) {
+                        // Update the stock list in the User object
+                        stockLists.removeIf(stockList -> stockList.getListID() == listID);
+                        conn.commit();
+                        return true;
+                    }
+                }
+                conn.rollback();
             } catch (SQLException e) {
+                conn.rollback();
                 e.printStackTrace();
+            } finally {
+                conn.setAutoCommit(true);
             }
-        } else {
-            System.out.println("You do not own this stock list and cannot delete it.");
+        } catch (SQLException e) {
+            e.printStackTrace();
         }
-        return false;
+    } else {
+        System.out.println("You do not own this stock list and cannot delete it.");
     }
+    return false;
+}
 
     private static List<StockList> loadStockLists(String username) {
         List<StockList> stockLists = new ArrayList<>();
@@ -803,5 +852,61 @@ public class User {
             System.out.println("You do not own this stock list and cannot delete stocks from it.");
         }
         return false;
+    }
+
+    public void viewStockListStatistics(int listID, Scanner scanner) {
+    StockList stockList = getAccessibleStockList(listID);
+    if (stockList != null) {
+        stockList.analyzeStockList(scanner);
+    } else {
+        System.out.println("You do not have access to this stock list or it doesn't exist.");
+    }
+}
+
+    private StockList getAccessibleStockList(int listID) {
+        // Check if the user created the list, has access to a shared list, or if it's a public list
+        String sql = "SELECT * FROM StockList WHERE listid = ? AND (Creator = ? OR listid IN (SELECT listid FROM SharedStockList WHERE username = ?) OR ispublic = TRUE)";
+        
+        try (Connection conn = DatabaseManager.getConnection();
+             PreparedStatement pstmt = conn.prepareStatement(sql)) {
+            
+            pstmt.setInt(1, listID);
+            pstmt.setString(2, this.username);
+            pstmt.setString(3, this.username);
+            
+            try (ResultSet rs = pstmt.executeQuery()) {
+                if (rs.next()) {
+                    String name = rs.getString("name");
+                    boolean isPublic = rs.getBoolean("ispublic");
+                    String creator = rs.getString("Creator");
+                    StockList stockList = new StockList(listID, name, isPublic, creator);
+                    stockList.setStockItems(loadStockListItems(listID));
+                    return stockList;
+                }
+            }
+        } catch (SQLException e) {
+            System.out.println("Error accessing stock list: " + e.getMessage());
+        }
+        return null;
+    }
+
+      private List<StockListItem> loadStockListItems(int listID) throws SQLException {
+        List<StockListItem> items = new ArrayList<>();
+        String sql = "SELECT * FROM StockListItem WHERE ListID = ?";
+        
+        try (Connection conn = DatabaseManager.getConnection();
+             PreparedStatement pstmt = conn.prepareStatement(sql)) {
+            
+            pstmt.setInt(1, listID);
+            
+            try (ResultSet rs = pstmt.executeQuery()) {
+                while (rs.next()) {
+                    String symbol = rs.getString("Symbol");
+                    int shares = rs.getInt("Shares");
+                    items.add(new StockListItem(symbol, shares));
+                }
+            }
+        }
+        return items;
     }
 }

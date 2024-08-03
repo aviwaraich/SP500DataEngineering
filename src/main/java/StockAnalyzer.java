@@ -1,4 +1,3 @@
-
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
@@ -25,7 +24,7 @@ public class StockAnalyzer {
         }
     }
 
-    public Map<String, Double> calculateBetass(List<String> symbols, LocalDate startDate, LocalDate endDate) throws SQLException {
+    public Map<String, Double> calculateBetas(List<String> symbols, LocalDate startDate, LocalDate endDate) throws SQLException {
         Map<String, Double> betas = new HashMap<>();
         String sql = "WITH stock_returns AS ("
                 + "    SELECT symbol, timestamp, (close - LAG(close) OVER (PARTITION BY symbol ORDER BY timestamp)) / LAG(close) OVER (PARTITION BY symbol ORDER BY timestamp) AS return "
@@ -65,7 +64,7 @@ public class StockAnalyzer {
         return betas;
     }
 
-    public Map<String, Double> calculateCoVss(List<String> symbols, LocalDate startDate, LocalDate endDate) throws SQLException {
+    public Map<String, Double> calculateCoVs(List<String> symbols, LocalDate startDate, LocalDate endDate) throws SQLException {
         Map<String, Double> covs = new HashMap<>();
         String sql = "SELECT symbol, "
                 + "       CASE WHEN AVG(close) = 0 THEN NULL "
@@ -131,7 +130,6 @@ public class StockAnalyzer {
     }
 
     public void addNewStockData(String symbol, LocalDate date, double open, double high, double low, double close, int volume) throws SQLException {
-        // First, ensure the stock exists in the Stock table
         String checkStockSql = "INSERT INTO Stock (Symbol) VALUES (?) ON CONFLICT (Symbol) DO NOTHING";
         String insertDataSql = "INSERT INTO Stocks (timestamp, Symbol, Open, High, Low, Close, Volume) "
                 + "VALUES (?, ?, ?, ?, ?, ?, ?) "
@@ -142,13 +140,11 @@ public class StockAnalyzer {
         try (Connection conn = DatabaseManager.getConnection()) {
             conn.setAutoCommit(false);
             try {
-                // Ensure stock exists
                 try (PreparedStatement pstmt = conn.prepareStatement(checkStockSql)) {
                     pstmt.setString(1, symbol);
                     pstmt.executeUpdate();
                 }
 
-                // Insert or update stock data
                 try (PreparedStatement pstmt = conn.prepareStatement(insertDataSql)) {
                     pstmt.setTimestamp(1, java.sql.Timestamp.valueOf(date.atStartOfDay()));
                     pstmt.setString(2, symbol);
@@ -202,8 +198,8 @@ public class StockAnalyzer {
         Map<String, Object> analysis = new HashMap<>();
 
         List<String> symbols = Collections.singletonList(symbol);
-        Map<String, Double> betas = calculateBetass(symbols, startDate, endDate);
-        Map<String, Double> covs = calculateCoVss(symbols, startDate, endDate);
+        Map<String, Double> betas = calculateBetas(symbols, startDate, endDate);
+        Map<String, Double> covs = calculateCoVs(symbols, startDate, endDate);
 
         analysis.put("beta", betas.get(symbol));
         analysis.put("cov", covs.get(symbol));
@@ -217,7 +213,7 @@ public class StockAnalyzer {
         return analysis;
     }
 
-    private List<Double> calculateMovingAverages(String symbol, LocalDate startDate, LocalDate endDate) throws SQLException {
+    public List<Double> calculateMovingAverages(String symbol, LocalDate startDate, LocalDate endDate) throws SQLException {
         String sql = "SELECT AVG(Close) OVER (ORDER BY timestamp ROWS BETWEEN 9 PRECEDING AND CURRENT ROW) AS MA10, "
                 + "AVG(Close) OVER (ORDER BY timestamp ROWS BETWEEN 29 PRECEDING AND CURRENT ROW) AS MA30 "
                 + "FROM Stocks "
@@ -237,7 +233,7 @@ public class StockAnalyzer {
         return Arrays.asList(0.0, 0.0);
     }
 
-    private double[] calculateRSI(String symbol, LocalDate startDate, LocalDate endDate) throws SQLException {
+    public double[] calculateRSI(String symbol, LocalDate startDate, LocalDate endDate) throws SQLException {
         String sql = "WITH price_changes AS ("
                 + "  SELECT timestamp, Close - LAG(Close) OVER (ORDER BY timestamp) AS change "
                 + "  FROM Stocks "
@@ -287,20 +283,17 @@ public class StockAnalyzer {
             }
         }
 
-        // Reverse the lists so that the oldest data comes first
         Collections.reverse(prices);
         Collections.reverse(days);
 
-        // Perform linear regression
         double[] coefficients = linearRegression(days, prices);
         double slope = coefficients[0];
         double intercept = coefficients[1];
 
-        // Predict future prices
         List<Double> predictions = new ArrayList<>();
         for (int i = 1; i <= daysToPredict; i++) {
             double predictedPrice = slope * (days.size() + i) + intercept;
-            predictions.add(Math.max(0, predictedPrice)); // Ensure price is not negative
+            predictions.add(Math.max(0, predictedPrice));
         }
 
         return predictions;
@@ -361,6 +354,76 @@ public class StockAnalyzer {
             default:
                 return String.format(baseQuery, "timestamp", "timestamp");
         }
+    }
+
+    public double getLatestClosePrice(String symbol, LocalDate endDate) throws SQLException {
+        String sql = "SELECT close FROM Stocks WHERE symbol = ? AND timestamp <= ? ORDER BY timestamp DESC LIMIT 1";
+        try (PreparedStatement pstmt = conn.prepareStatement(sql)) {
+            pstmt.setString(1, symbol);
+            pstmt.setDate(2, java.sql.Date.valueOf(endDate));
+            try (ResultSet rs = pstmt.executeQuery()) {
+                if (rs.next()) {
+                    return rs.getDouble("close");
+                }
+            }
+        }
+        throw new SQLException("No closing price found for " + symbol + " on or before " + endDate);
+    }
+
+    public double calculateCoV(String symbol, LocalDate startDate, LocalDate endDate) throws SQLException {
+        String sql = "SELECT AVG(close) as mean, STDDEV(close) as stddev FROM Stocks WHERE symbol = ? AND timestamp BETWEEN ? AND ?";
+        try (PreparedStatement pstmt = conn.prepareStatement(sql)) {
+            pstmt.setString(1, symbol);
+            pstmt.setDate(2, java.sql.Date.valueOf(startDate));
+            pstmt.setDate(3, java.sql.Date.valueOf(endDate));
+            try (ResultSet rs = pstmt.executeQuery()) {
+                if (rs.next()) {
+                    double mean = rs.getDouble("mean");
+                    double stddev = rs.getDouble("stddev");
+                    return (mean != 0) ? stddev / mean : Double.NaN;
+                }
+            }
+        }
+        return Double.NaN;
+    }
+
+    public double calculateBeta(String symbol, LocalDate startDate, LocalDate endDate) throws SQLException {
+        Map<String, Double> betas = calculateBetas(Collections.singletonList(symbol), startDate, endDate);
+        return betas.getOrDefault(symbol, Double.NaN);
+    }
+
+    public LocalDate getEarliestDateForPortfolio(Portfolio portfolio) throws SQLException {
+        String sql = "SELECT MIN(timestamp) as earliest_date FROM Stocks WHERE symbol IN (" +
+                     String.join(",", Collections.nCopies(portfolio.getHoldings().size(), "?")) + ")";
+        try (PreparedStatement pstmt = conn.prepareStatement(sql)) {
+            int i = 1;
+            for (StockHolding holding : portfolio.getHoldings()) {
+                pstmt.setString(i++, holding.getSymbol());
+            }
+            try (ResultSet rs = pstmt.executeQuery()) {
+                if (rs.next()) {
+                    return rs.getDate("earliest_date").toLocalDate();
+                }
+            }
+        }
+        return LocalDate.now(); // Default to today if no data found
+    }
+
+    public LocalDate getLatestDateForPortfolio(Portfolio portfolio) throws SQLException {
+        String sql = "SELECT MAX(timestamp) as latest_date FROM Stocks WHERE symbol IN (" +
+                     String.join(",", Collections.nCopies(portfolio.getHoldings().size(), "?")) + ")";
+        try (PreparedStatement pstmt = conn.prepareStatement(sql)) {
+            int i = 1;
+            for (StockHolding holding : portfolio.getHoldings()) {
+                pstmt.setString(i++, holding.getSymbol());
+            }
+            try (ResultSet rs = pstmt.executeQuery()) {
+                if (rs.next()) {
+                    return rs.getDate("latest_date").toLocalDate();
+                }
+            }
+        }
+        return LocalDate.now(); // Default to today if no data found
     }
 
     public void closeConnection() {

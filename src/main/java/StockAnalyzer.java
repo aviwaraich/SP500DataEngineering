@@ -15,15 +15,7 @@ public class StockAnalyzer {
 
     private Connection conn;
 
-    public StockAnalyzer() {
-        try {
-            this.conn = DatabaseManager.getConnection();
-        } catch (SQLException e) {
-            System.out.println("Failed to establish database connection in StockAnalyzer.");
-            e.printStackTrace();
-        }
-    }
-
+    
     public Map<String, Double> calculateBetas(List<String> symbols, LocalDate startDate, LocalDate endDate) throws SQLException {
         Map<String, Double> betas = new HashMap<>();
         String sql = "WITH stock_returns AS ("
@@ -42,7 +34,7 @@ public class StockAnalyzer {
                 + "JOIN market_returns mr ON sr.timestamp = mr.timestamp "
                 + "GROUP BY sr.symbol";
 
-        try (PreparedStatement pstmt = conn.prepareStatement(sql)) {
+        try (Connection conn = DatabaseManager.getConnection(); PreparedStatement pstmt = conn.prepareStatement(sql)) {
             int paramIndex = 1;
             for (String symbol : symbols) {
                 pstmt.setString(paramIndex++, symbol);
@@ -74,7 +66,7 @@ public class StockAnalyzer {
                 + "WHERE symbol IN (" + String.join(",", Collections.nCopies(symbols.size(), "?")) + ") AND timestamp BETWEEN ? AND ? "
                 + "GROUP BY symbol";
 
-        try (PreparedStatement pstmt = conn.prepareStatement(sql)) {
+        try (Connection conn = DatabaseManager.getConnection(); PreparedStatement pstmt = conn.prepareStatement(sql)) {
             int paramIndex = 1;
             for (String symbol : symbols) {
                 pstmt.setString(paramIndex++, symbol);
@@ -109,7 +101,7 @@ public class StockAnalyzer {
                 + "JOIN returns r2 ON r1.timestamp = r2.timestamp "
                 + "GROUP BY r1.symbol, r2.symbol";
 
-        try (PreparedStatement pstmt = conn.prepareStatement(sql)) {
+        try (Connection conn = DatabaseManager.getConnection(); PreparedStatement pstmt = conn.prepareStatement(sql)) {
             int paramIndex = 1;
             for (String symbol : symbols) {
                 pstmt.setString(paramIndex++, symbol);
@@ -220,7 +212,7 @@ public class StockAnalyzer {
                 + "WHERE Symbol = ? AND timestamp BETWEEN ? AND ? "
                 + "ORDER BY timestamp DESC LIMIT 1";
 
-        try (PreparedStatement pstmt = conn.prepareStatement(sql)) {
+        try (Connection conn = DatabaseManager.getConnection(); PreparedStatement pstmt = conn.prepareStatement(sql)) {
             pstmt.setString(1, symbol);
             pstmt.setDate(2, java.sql.Date.valueOf(startDate));
             pstmt.setDate(3, java.sql.Date.valueOf(endDate));
@@ -248,7 +240,7 @@ public class StockAnalyzer {
                 + "SELECT AVG(gain) AS avg_gain, AVG(loss) AS avg_loss "
                 + "FROM gains_losses";
 
-        try (PreparedStatement pstmt = conn.prepareStatement(sql)) {
+        try (Connection conn = DatabaseManager.getConnection(); PreparedStatement pstmt = conn.prepareStatement(sql)) {
             pstmt.setString(1, symbol);
             pstmt.setDate(2, java.sql.Date.valueOf(startDate));
             pstmt.setDate(3, java.sql.Date.valueOf(endDate));
@@ -271,7 +263,7 @@ public class StockAnalyzer {
         List<Double> prices = new ArrayList<>();
         List<Integer> days = new ArrayList<>();
 
-        try (PreparedStatement pstmt = conn.prepareStatement(sql)) {
+        try (Connection conn = DatabaseManager.getConnection(); PreparedStatement pstmt = conn.prepareStatement(sql)) {
             pstmt.setString(1, symbol);
             pstmt.setDate(2, java.sql.Date.valueOf(startDate));
 
@@ -319,7 +311,7 @@ public class StockAnalyzer {
         List<Map<String, Object>> historicalPrices = new ArrayList<>();
         String sql = buildSqlQuery(frequency);
 
-        try (PreparedStatement pstmt = conn.prepareStatement(sql)) {
+        try (Connection conn = DatabaseManager.getConnection(); PreparedStatement pstmt = conn.prepareStatement(sql)) {
             pstmt.setString(1, symbol);
             pstmt.setDate(2, java.sql.Date.valueOf(startDate));
             pstmt.setDate(3, java.sql.Date.valueOf(endDate));
@@ -358,7 +350,7 @@ public class StockAnalyzer {
 
     public double getLatestClosePrice(String symbol, LocalDate endDate) throws SQLException {
         String sql = "SELECT close FROM Stocks WHERE symbol = ? AND timestamp <= ? ORDER BY timestamp DESC LIMIT 1";
-        try (PreparedStatement pstmt = conn.prepareStatement(sql)) {
+        try (Connection conn = DatabaseManager.getConnection(); PreparedStatement pstmt = conn.prepareStatement(sql)) {
             pstmt.setString(1, symbol);
             pstmt.setDate(2, java.sql.Date.valueOf(endDate));
             try (ResultSet rs = pstmt.executeQuery()) {
@@ -372,7 +364,7 @@ public class StockAnalyzer {
 
     public double calculateCoV(String symbol, LocalDate startDate, LocalDate endDate) throws SQLException {
         String sql = "SELECT AVG(close) as mean, STDDEV(close) as stddev FROM Stocks WHERE symbol = ? AND timestamp BETWEEN ? AND ?";
-        try (PreparedStatement pstmt = conn.prepareStatement(sql)) {
+        try (Connection conn = DatabaseManager.getConnection(); PreparedStatement pstmt = conn.prepareStatement(sql)) {
             pstmt.setString(1, symbol);
             pstmt.setDate(2, java.sql.Date.valueOf(startDate));
             pstmt.setDate(3, java.sql.Date.valueOf(endDate));
@@ -395,7 +387,7 @@ public class StockAnalyzer {
     public LocalDate getEarliestDateForPortfolio(Portfolio portfolio) throws SQLException {
         String sql = "SELECT MIN(timestamp) as earliest_date FROM Stocks WHERE symbol IN (" +
                      String.join(",", Collections.nCopies(portfolio.getHoldings().size(), "?")) + ")";
-        try (PreparedStatement pstmt = conn.prepareStatement(sql)) {
+        try (Connection conn = DatabaseManager.getConnection(); PreparedStatement pstmt = conn.prepareStatement(sql)) {
             int i = 1;
             for (StockHolding holding : portfolio.getHoldings()) {
                 pstmt.setString(i++, holding.getSymbol());
@@ -412,7 +404,7 @@ public class StockAnalyzer {
     public LocalDate getLatestDateForPortfolio(Portfolio portfolio) throws SQLException {
         String sql = "SELECT MAX(timestamp) as latest_date FROM Stocks WHERE symbol IN (" +
                      String.join(",", Collections.nCopies(portfolio.getHoldings().size(), "?")) + ")";
-        try (PreparedStatement pstmt = conn.prepareStatement(sql)) {
+        try (Connection conn = DatabaseManager.getConnection(); PreparedStatement pstmt = conn.prepareStatement(sql)) {
             int i = 1;
             for (StockHolding holding : portfolio.getHoldings()) {
                 pstmt.setString(i++, holding.getSymbol());

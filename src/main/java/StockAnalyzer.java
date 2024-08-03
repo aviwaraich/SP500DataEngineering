@@ -162,7 +162,7 @@ public class StockAnalyzer {
     public List<String> getAllStockSymbols() throws SQLException {
         List<String> symbols = new ArrayList<>();
         String sql = "SELECT DISTINCT Symbol FROM Stocks";
-        try (Statement stmt = conn.createStatement(); ResultSet rs = stmt.executeQuery(sql)) {
+        try (Connection conn = DatabaseManager.getConnection(); Statement stmt = conn.createStatement(); ResultSet rs = stmt.executeQuery(sql)) {
             while (rs.next()) {
                 symbols.add(rs.getString("Symbol"));
             }

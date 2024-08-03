@@ -48,156 +48,156 @@ public class Portfolio {
     }
 
     public void buyStock(String symbol, int quantity) {
-    double latestPrice = getLatestClosePrice(symbol);
-    if (latestPrice == -1) {
-        System.out.println("Unable to retrieve the latest price for " + symbol);
-        return;
+        double latestPrice = getLatestClosePrice(symbol);
+        if (latestPrice == -1) {
+            System.out.println("Unable to retrieve the latest price for " + symbol);
+            return;
+        }
+
+        double cost = quantity * latestPrice;
+        if (cost <= cashBalance) {
+            String updatePortfolioSql = "UPDATE Portfolio SET CashBalance = CashBalance - ? WHERE Name = ? AND Username = ?";
+            String upsertHoldingSql = "INSERT INTO StockHolding (PortfolioName, Username, Symbol, Shares, AveragePurchasePrice) "
+                    + "VALUES (?, ?, ?, ?, ?) "
+                    + "ON CONFLICT (PortfolioName, Username, Symbol) DO UPDATE SET "
+                    + "Shares = StockHolding.Shares + EXCLUDED.Shares, "
+                    + "AveragePurchasePrice = (StockHolding.AveragePurchasePrice * StockHolding.Shares + EXCLUDED.AveragePurchasePrice * EXCLUDED.Shares) / (StockHolding.Shares + EXCLUDED.Shares)";
+
+            try (Connection conn = DatabaseManager.getConnection()) {
+                conn.setAutoCommit(false);
+                try {
+                    // Update portfolio cash balance
+                    try (PreparedStatement pstmt = conn.prepareStatement(updatePortfolioSql)) {
+                        pstmt.setDouble(1, cost);
+                        pstmt.setString(2, this.name);
+                        pstmt.setString(3, this.username);
+                        pstmt.executeUpdate();
+                    }
+
+                    // Update or insert stock holding
+                    try (PreparedStatement pstmt = conn.prepareStatement(upsertHoldingSql)) {
+                        pstmt.setString(1, this.name);
+                        pstmt.setString(2, this.username);
+                        pstmt.setString(3, symbol);
+                        pstmt.setInt(4, quantity);
+                        pstmt.setDouble(5, latestPrice);
+                        pstmt.executeUpdate();
+                    }
+
+                    conn.commit();
+                    cashBalance -= cost;
+                    updateLocalHoldings(symbol, quantity, latestPrice);
+                    refreshCashBalance();
+                    System.out.println("Bought " + quantity + " shares of " + symbol + " for $" + cost);
+                } catch (SQLException e) {
+                    conn.rollback();
+                    if (e.getMessage().contains("violates foreign key constraint")) {
+                        System.out.println("Error: The stock symbol " + symbol + " is not recognized in our system.");
+                    } else {
+                        System.out.println("Transaction failed. Error: " + e.getMessage());
+                    }
+                } finally {
+                    conn.setAutoCommit(true);
+                }
+            } catch (SQLException e) {
+                System.out.println("Database operation failed. Error: " + e.getMessage());
+            }
+        } else {
+            System.out.println("Insufficient funds to buy stocks.");
+        }
     }
 
-    double cost = quantity * latestPrice;
-    if (cost <= cashBalance) {
-        String updatePortfolioSql = "UPDATE Portfolio SET CashBalance = CashBalance - ? WHERE Name = ? AND Username = ?";
-        String upsertHoldingSql = "INSERT INTO StockHolding (PortfolioName, Username, Symbol, Shares, AveragePurchasePrice) "
-                + "VALUES (?, ?, ?, ?, ?) "
-                + "ON CONFLICT (PortfolioName, Username, Symbol) DO UPDATE SET "
-                + "Shares = StockHolding.Shares + EXCLUDED.Shares, "
-                + "AveragePurchasePrice = (StockHolding.AveragePurchasePrice * StockHolding.Shares + EXCLUDED.AveragePurchasePrice * EXCLUDED.Shares) / (StockHolding.Shares + EXCLUDED.Shares)";
+    public void sellStock(String symbol, int quantity) {
+        double latestPrice = getLatestClosePrice(symbol);
+        if (latestPrice == -1) {
+            System.out.println("Unable to retrieve the latest price for " + symbol);
+            return;
+        }
+
+        String checkSharesSql = "SELECT Shares FROM StockHolding WHERE PortfolioName = ? AND Username = ? AND Symbol = ?";
+        String updatePortfolioSql = "UPDATE Portfolio SET CashBalance = CashBalance + ? WHERE Name = ? AND Username = ?";
+        String updateHoldingSql = "UPDATE StockHolding SET Shares = Shares - ? WHERE PortfolioName = ? AND Username = ? AND Symbol = ?";
+        String deleteHoldingSql = "DELETE FROM StockHolding WHERE PortfolioName = ? AND Username = ? AND Symbol = ? AND Shares = 0";
 
         try (Connection conn = DatabaseManager.getConnection()) {
             conn.setAutoCommit(false);
             try {
-                // Update portfolio cash balance
-                try (PreparedStatement pstmt = conn.prepareStatement(updatePortfolioSql)) {
-                    pstmt.setDouble(1, cost);
-                    pstmt.setString(2, this.name);
-                    pstmt.setString(3, this.username);
-                    pstmt.executeUpdate();
-                }
-
-                // Update or insert stock holding
-                try (PreparedStatement pstmt = conn.prepareStatement(upsertHoldingSql)) {
+                // Check if enough shares are available
+                int availableShares = 0;
+                try (PreparedStatement pstmt = conn.prepareStatement(checkSharesSql)) {
                     pstmt.setString(1, this.name);
                     pstmt.setString(2, this.username);
                     pstmt.setString(3, symbol);
-                    pstmt.setInt(4, quantity);
-                    pstmt.setDouble(5, latestPrice);
-                    pstmt.executeUpdate();
+                    ResultSet rs = pstmt.executeQuery();
+                    if (rs.next()) {
+                        availableShares = rs.getInt("Shares");
+                    }
                 }
 
-                conn.commit();
-                cashBalance -= cost;
-                updateLocalHoldings(symbol, quantity, latestPrice);
-                refreshCashBalance();
-                System.out.println("Bought " + quantity + " shares of " + symbol + " for $" + cost);
+                if (availableShares >= quantity) {
+                    double earnings = quantity * latestPrice;
+
+                    // Update portfolio cash balance
+                    try (PreparedStatement pstmt = conn.prepareStatement(updatePortfolioSql)) {
+                        pstmt.setDouble(1, earnings);
+                        pstmt.setString(2, this.name);
+                        pstmt.setString(3, this.username);
+                        pstmt.executeUpdate();
+                    }
+
+                    // Update stock holding
+                    try (PreparedStatement pstmt = conn.prepareStatement(updateHoldingSql)) {
+                        pstmt.setInt(1, quantity);
+                        pstmt.setString(2, this.name);
+                        pstmt.setString(3, this.username);
+                        pstmt.setString(4, symbol);
+                        pstmt.executeUpdate();
+                    }
+
+                    // Remove holding if shares become 0
+                    try (PreparedStatement pstmt = conn.prepareStatement(deleteHoldingSql)) {
+                        pstmt.setString(1, this.name);
+                        pstmt.setString(2, this.username);
+                        pstmt.setString(3, symbol);
+                        pstmt.executeUpdate();
+                    }
+
+                    conn.commit();
+                    cashBalance += earnings;
+                    updateLocalHoldings(symbol, -quantity, latestPrice);
+                    refreshCashBalance();
+                    System.out.println("Sold " + quantity + " shares of " + symbol + " for $" + earnings);
+                } else {
+                    System.out.println("Insufficient shares to sell. You only have " + availableShares + " shares of " + symbol);
+                }
             } catch (SQLException e) {
                 conn.rollback();
-                if (e.getMessage().contains("violates foreign key constraint")) {
-                    System.out.println("Error: The stock symbol " + symbol + " is not recognized in our system.");
-                } else {
-                    System.out.println("Transaction failed. Error: " + e.getMessage());
-                }
+                System.out.println("Transaction failed. Rolling back. Error: " + e.getMessage());
+                e.printStackTrace();
             } finally {
                 conn.setAutoCommit(true);
             }
         } catch (SQLException e) {
             System.out.println("Database operation failed. Error: " + e.getMessage());
+            e.printStackTrace();
         }
-    } else {
-        System.out.println("Insufficient funds to buy stocks.");
-    }
-}
-
-    public void sellStock(String symbol, int quantity) {
-    double latestPrice = getLatestClosePrice(symbol);
-    if (latestPrice == -1) {
-        System.out.println("Unable to retrieve the latest price for " + symbol);
-        return;
     }
 
-    String checkSharesSql = "SELECT Shares FROM StockHolding WHERE PortfolioName = ? AND Username = ? AND Symbol = ?";
-    String updatePortfolioSql = "UPDATE Portfolio SET CashBalance = CashBalance + ? WHERE Name = ? AND Username = ?";
-    String updateHoldingSql = "UPDATE StockHolding SET Shares = Shares - ? WHERE PortfolioName = ? AND Username = ? AND Symbol = ?";
-    String deleteHoldingSql = "DELETE FROM StockHolding WHERE PortfolioName = ? AND Username = ? AND Symbol = ? AND Shares = 0";
-
-    try (Connection conn = DatabaseManager.getConnection()) {
-        conn.setAutoCommit(false);
-        try {
-            // Check if enough shares are available
-            int availableShares = 0;
-            try (PreparedStatement pstmt = conn.prepareStatement(checkSharesSql)) {
-                pstmt.setString(1, this.name);
-                pstmt.setString(2, this.username);
-                pstmt.setString(3, symbol);
-                ResultSet rs = pstmt.executeQuery();
+    public double getLatestClosePrice(String symbol) {
+        String sql = "SELECT close FROM Stocks WHERE symbol = ? AND timestamp <= ? ORDER BY timestamp DESC LIMIT 1";
+        try (Connection conn = DatabaseManager.getConnection(); PreparedStatement pstmt = conn.prepareStatement(sql)) {
+            pstmt.setString(1, symbol);
+            pstmt.setTimestamp(2, java.sql.Timestamp.valueOf(LocalDate.now().atStartOfDay()));
+            try (ResultSet rs = pstmt.executeQuery()) {
                 if (rs.next()) {
-                    availableShares = rs.getInt("Shares");
+                    return rs.getDouble("close");
                 }
-            }
-
-            if (availableShares >= quantity) {
-                double earnings = quantity * latestPrice;
-
-                // Update portfolio cash balance
-                try (PreparedStatement pstmt = conn.prepareStatement(updatePortfolioSql)) {
-                    pstmt.setDouble(1, earnings);
-                    pstmt.setString(2, this.name);
-                    pstmt.setString(3, this.username);
-                    pstmt.executeUpdate();
-                }
-
-                // Update stock holding
-                try (PreparedStatement pstmt = conn.prepareStatement(updateHoldingSql)) {
-                    pstmt.setInt(1, quantity);
-                    pstmt.setString(2, this.name);
-                    pstmt.setString(3, this.username);
-                    pstmt.setString(4, symbol);
-                    pstmt.executeUpdate();
-                }
-
-                // Remove holding if shares become 0
-                try (PreparedStatement pstmt = conn.prepareStatement(deleteHoldingSql)) {
-                    pstmt.setString(1, this.name);
-                    pstmt.setString(2, this.username);
-                    pstmt.setString(3, symbol);
-                    pstmt.executeUpdate();
-                }
-
-                conn.commit();
-                cashBalance += earnings;
-                updateLocalHoldings(symbol, -quantity, latestPrice);
-                refreshCashBalance();
-                System.out.println("Sold " + quantity + " shares of " + symbol + " for $" + earnings);
-            } else {
-                System.out.println("Insufficient shares to sell. You only have " + availableShares + " shares of " + symbol);
             }
         } catch (SQLException e) {
-            conn.rollback();
-            System.out.println("Transaction failed. Rolling back. Error: " + e.getMessage());
             e.printStackTrace();
-        } finally {
-            conn.setAutoCommit(true);
         }
-    } catch (SQLException e) {
-        System.out.println("Database operation failed. Error: " + e.getMessage());
-        e.printStackTrace();
+        return -1;
     }
-}
-    public double getLatestClosePrice(String symbol) {
-    String sql = "SELECT close FROM Stocks WHERE symbol = ? AND timestamp <= ? ORDER BY timestamp DESC LIMIT 1";
-    try (Connection conn = DatabaseManager.getConnection(); 
-         PreparedStatement pstmt = conn.prepareStatement(sql)) {
-        pstmt.setString(1, symbol);
-        pstmt.setTimestamp(2, java.sql.Timestamp.valueOf(LocalDate.now().atStartOfDay()));
-        try (ResultSet rs = pstmt.executeQuery()) {
-            if (rs.next()) {
-                return rs.getDouble("close");
-            }
-        }
-    } catch (SQLException e) {
-        e.printStackTrace();
-    }
-    return -1;
-}
 
     public void withdraw(double amount) {
         if (amount <= cashBalance) {
@@ -277,17 +277,17 @@ public class Portfolio {
     }
 
     public void viewDetails() {
-    System.out.println(this);
-    System.out.println("Holdings:");
-    if (holdings.isEmpty()) {
-        System.out.println("  No stocks in this portfolio.");
-    } else {
-        for (StockHolding holding : holdings) {
-            System.out.println("  " + holding);
+        System.out.println(this);
+        System.out.println("Holdings:");
+        if (holdings.isEmpty()) {
+            System.out.println("  No stocks in this portfolio.");
+        } else {
+            for (StockHolding holding : holdings) {
+                System.out.println("  " + holding);
+            }
         }
+        System.out.println("Cash Balance: $" + String.format("%.2f", cashBalance));
     }
-    System.out.println("Cash Balance: $" + String.format("%.2f", cashBalance));
-}
 
     public static boolean save(Portfolio portfolio) {
         String sql = "INSERT INTO Portfolio (name, username, cashbalance) VALUES (?, ?, ?)";
@@ -370,119 +370,128 @@ public class Portfolio {
     }
 
     public void viewStockHistory(String symbol) throws SQLException {
-    System.out.print("Enter start date (YYYY-MM-DD): ");
-    LocalDate startDate = LocalDate.parse(new Scanner(System.in).nextLine());
-    System.out.print("Enter end date (YYYY-MM-DD): ");
-    LocalDate endDate = LocalDate.parse(new Scanner(System.in).nextLine());
+        System.out.print("Enter start date (YYYY-MM-DD): ");
+        LocalDate startDate = LocalDate.parse(new Scanner(System.in).nextLine());
+        System.out.print("Enter end date (YYYY-MM-DD): ");
+        LocalDate endDate = LocalDate.parse(new Scanner(System.in).nextLine());
 
-    System.out.println("\nSelect data frequency:");
-    System.out.println("1. Daily");
-    System.out.println("2. Weekly");
-    System.out.println("3. Monthly");
-    System.out.println("4. Yearly");
-    System.out.print("Enter your choice (1-4): ");
-    int frequencyChoice = new Scanner(System.in).nextInt();
+        System.out.println("\nSelect data frequency:");
+        System.out.println("1. Daily");
+        System.out.println("2. Weekly");
+        System.out.println("3. Monthly");
+        System.out.println("4. Yearly");
+        System.out.print("Enter your choice (1-4): ");
+        int frequencyChoice = new Scanner(System.in).nextInt();
 
-    String frequency;
-    switch (frequencyChoice) {
-        case 1: frequency = "daily"; break;
-        case 2: frequency = "weekly"; break;
-        case 3: frequency = "monthly"; break;
-        case 4: frequency = "yearly"; break;
-        default: frequency = "daily";
+        String frequency;
+        switch (frequencyChoice) {
+            case 1:
+                frequency = "daily";
+                break;
+            case 2:
+                frequency = "weekly";
+                break;
+            case 3:
+                frequency = "monthly";
+                break;
+            case 4:
+                frequency = "yearly";
+                break;
+            default:
+                frequency = "daily";
+        }
+
+        List<Map<String, Object>> historicalPrices = analyzer.getHistoricalPrices(symbol, startDate, endDate, frequency);
+
+        if (historicalPrices.isEmpty()) {
+            System.out.println("No data available for the specified date range and frequency.");
+            return;
+        }
+
+        System.out.println("\nHistorical Prices for " + symbol + " (" + frequency + ")");
+        System.out.println("Date\t\tPrice");
+        System.out.println("--------------------");
+
+        for (Map<String, Object> dataPoint : historicalPrices) {
+            LocalDate date = (LocalDate) dataPoint.get("date");
+            double price = (double) dataPoint.get("price");
+            System.out.printf("%s\t$%.2f\n", date, price);
+        }
+
+        displayASCIIChart(historicalPrices);
     }
 
-    List<Map<String, Object>> historicalPrices = analyzer.getHistoricalPrices(symbol, startDate, endDate, frequency);
-    
-    if (historicalPrices.isEmpty()) {
-        System.out.println("No data available for the specified date range and frequency.");
-        return;
+    private void displayASCIIChart(List<Map<String, Object>> data) {
+        int chartWidth = 50;
+        double min = data.stream().mapToDouble(d -> (double) d.get("price")).min().orElse(0);
+        double max = data.stream().mapToDouble(d -> (double) d.get("price")).max().orElse(0);
+
+        System.out.println("\nPrice Chart:");
+        System.out.println("Date       Price   Chart");
+        System.out.println("-----------------------------");
+
+        for (Map<String, Object> point : data) {
+            LocalDate date = (LocalDate) point.get("date");
+            double price = (double) point.get("price");
+            int barLength = (int) ((price - min) / (max - min) * chartWidth);
+            System.out.printf("%s $%.2f |%s\n", date, price, "=".repeat(barLength));
+        }
     }
 
-    System.out.println("\nHistorical Prices for " + symbol + " (" + frequency + ")");
-    System.out.println("Date\t\tPrice");
-    System.out.println("--------------------");
-    
-    for (Map<String, Object> dataPoint : historicalPrices) {
-        LocalDate date = (LocalDate) dataPoint.get("date");
-        double price = (double) dataPoint.get("price");
-        System.out.printf("%s\t$%.2f\n", date, price);
-    }
-    
-    displayASCIIChart(historicalPrices);
-}
+    public void predictFuturePrices() throws SQLException {
+        if (holdings.isEmpty()) {
+            System.out.println("You don't have any stock holdings in this portfolio.");
+            return;
+        }
 
-private void displayASCIIChart(List<Map<String, Object>> data) {
-    int chartWidth = 50;
-    double min = data.stream().mapToDouble(d -> (double) d.get("price")).min().orElse(0);
-    double max = data.stream().mapToDouble(d -> (double) d.get("price")).max().orElse(0);
-    
-    System.out.println("\nPrice Chart:");
-    System.out.println("Date       Price   Chart");
-    System.out.println("-----------------------------");
-    
-    for (Map<String, Object> point : data) {
-        LocalDate date = (LocalDate) point.get("date");
-        double price = (double) point.get("price");
-        int barLength = (int) ((price - min) / (max - min) * chartWidth);
-        System.out.printf("%s $%.2f |%s\n", date, price, "=".repeat(barLength));
-    }
-}
+        System.out.println("Select a stock to predict future prices:");
+        for (int i = 0; i < holdings.size(); i++) {
+            System.out.printf("%d. %s\n", i + 1, holdings.get(i).getSymbol());
+        }
 
-public void predictFuturePrices() throws SQLException {
-    if (holdings.isEmpty()) {
-        System.out.println("You don't have any stock holdings in this portfolio.");
-        return;
+        Scanner scanner = new Scanner(System.in);
+        int choice = scanner.nextInt();
+        scanner.nextLine(); // Consume newline
+
+        if (choice < 1 || choice > holdings.size()) {
+            System.out.println("Invalid selection.");
+            return;
+        }
+
+        String symbol = holdings.get(choice - 1).getSymbol();
+        LocalDate startDate = LocalDate.now();
+        int daysToPredict = 30;  // Predict for the next 30 days
+
+        List<Double> predictions = analyzer.predictFuturePrice(symbol, startDate, daysToPredict);
+
+        displayPredictions(symbol, predictions);
     }
 
-    System.out.println("Select a stock to predict future prices:");
-    for (int i = 0; i < holdings.size(); i++) {
-        System.out.printf("%d. %s\n", i + 1, holdings.get(i).getSymbol());
+    private void displayPredictions(String symbol, List<Double> predictions) {
+        System.out.println("\nPrice Predictions for " + symbol);
+        System.out.println("Day\tPredicted Price");
+        System.out.println("--------------------");
+
+        for (int i = 0; i < predictions.size(); i++) {
+            System.out.printf("%d\t$%.2f\n", i + 1, predictions.get(i));
+        }
+
+        displayASCIIChart_Prediction(predictions);
     }
 
-    Scanner scanner = new Scanner(System.in);
-    int choice = scanner.nextInt();
-    scanner.nextLine(); // Consume newline
+    private void displayASCIIChart_Prediction(List<Double> data) {
+        int chartWidth = 50;
+        double min = data.stream().mapToDouble(Double::doubleValue).min().orElse(0);
+        double max = data.stream().mapToDouble(Double::doubleValue).max().orElse(0);
 
-    if (choice < 1 || choice > holdings.size()) {
-        System.out.println("Invalid selection.");
-        return;
+        System.out.println("\nPrice Prediction Chart:");
+        System.out.println("Day   Price   Chart");
+        System.out.println("-----------------------------");
+
+        for (int i = 0; i < data.size(); i++) {
+            double price = data.get(i);
+            int barLength = (int) ((price - min) / (max - min) * chartWidth);
+            System.out.printf("%-5d $%.2f |%s\n", i + 1, price, "=".repeat(barLength));
+        }
     }
-
-    String symbol = holdings.get(choice - 1).getSymbol();
-    LocalDate startDate = LocalDate.now();
-    int daysToPredict = 30;  // Predict for the next 30 days
-
-    List<Double> predictions = analyzer.predictFuturePrice(symbol, startDate, daysToPredict);
-    
-    displayPredictions(symbol, predictions);
-}
-
-private void displayPredictions(String symbol, List<Double> predictions) {
-    System.out.println("\nPrice Predictions for " + symbol);
-    System.out.println("Day\tPredicted Price");
-    System.out.println("--------------------");
-    
-    for (int i = 0; i < predictions.size(); i++) {
-        System.out.printf("%d\t$%.2f\n", i+1, predictions.get(i));
-    }
-    
-    displayASCIIChart_Prediction(predictions);
-}
-
-private void displayASCIIChart_Prediction(List<Double> data) {
-    int chartWidth = 50;
-    double min = data.stream().mapToDouble(Double::doubleValue).min().orElse(0);
-    double max = data.stream().mapToDouble(Double::doubleValue).max().orElse(0);
-    
-    System.out.println("\nPrice Prediction Chart:");
-    System.out.println("Day   Price   Chart");
-    System.out.println("-----------------------------");
-    
-    for (int i = 0; i < data.size(); i++) {
-        double price = data.get(i);
-        int barLength = (int) ((price - min) / (max - min) * chartWidth);
-        System.out.printf("%-5d $%.2f |%s\n", i + 1, price, "=".repeat(barLength));
-    }
-}
 }

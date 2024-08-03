@@ -1,4 +1,6 @@
+
 public class StockListItem {
+
     private String symbol;
     private int shares;
 
@@ -7,9 +9,17 @@ public class StockListItem {
         this.shares = shares;
     }
 
-    public String getSymbol() { return symbol; }
-    public int getShares() { return shares; }
-    public void setShares(int shares) { this.shares = shares; }
+    public String getSymbol() {
+        return symbol;
+    }
+
+    public int getShares() {
+        return shares;
+    }
+
+    public void setShares(int shares) {
+        this.shares = shares;
+    }
 
     @Override
     public String toString() {

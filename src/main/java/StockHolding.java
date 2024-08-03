@@ -1,4 +1,6 @@
+
 public class StockHolding {
+
     private String symbol;
     private int shares;
     private double averagePurchasePrice;
@@ -21,12 +23,12 @@ public class StockHolding {
         return symbol;
     }
 
-    public int getShares() { 
-        return shares; 
+    public int getShares() {
+        return shares;
     }
 
-    public void setShares(int shares) { 
-        this.shares = shares; 
+    public void setShares(int shares) {
+        this.shares = shares;
     }
 
     @Override

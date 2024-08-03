@@ -84,18 +84,18 @@ public class StockList {
                 System.out.println("  " + item);
             }
         }
-    System.out.println("Reviews:");
-    if (reviews.isEmpty()) {
-        System.out.println("  No reviews for this list.");
-    } else {
-        for (Review review : reviews) {
-            System.out.println("  " + review.getContent() + " - " + review.getUser() + " (" + review.getTimestamp() + ")");
+        System.out.println("Reviews:");
+        if (reviews.isEmpty()) {
+            System.out.println("  No reviews for this list.");
+        } else {
+            for (Review review : reviews) {
+                System.out.println("  " + review.getContent() + " - " + review.getUser() + " (" + review.getTimestamp() + ")");
+            }
         }
     }
-}
 
 // Add this method to StockList class
-public void setStocks(List<Stock> stocks) {
-    this.stocks = stocks;
-}
+    public void setStocks(List<Stock> stocks) {
+        this.stocks = stocks;
+    }
 }

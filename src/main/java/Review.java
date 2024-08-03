@@ -1,6 +1,8 @@
+
 import java.util.Date;
 
 public class Review {
+
     private int reviewID;
     private String content;
     private Date timestamp;
@@ -20,7 +22,7 @@ public class Review {
     }
 
     public int getListID() {
-    return listID;
+        return listID;
     }
 
     public String getContent() {
